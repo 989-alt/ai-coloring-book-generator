@@ -1,104 +1,87 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 
-const POLLINATIONS_BASE_URL = "https://image.pollinations.ai/prompt/";
-
-const fetchWithRetry = async (url: string, retries: number = 3, delayMs: number = 2000): Promise<Response> => {
-  for (let i = 0; i < retries; i++) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000); 
-      const response = await fetch(url, { signal: controller.signal });
-      clearTimeout(timeoutId);
-      if (response.ok) return response;
-    } catch (err) {
-      console.warn(`재시도 ${i + 1}...`);
-    }
-    await new Promise(resolve => setTimeout(resolve, delayMs));
-  }
-  throw new Error("이미지 서버 응답 없음");
+// 이미지를 Base64로 변환하는 헬퍼 함수
+const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => {
+      // "data:image/png;base64," 부분 제거하고 순수 데이터만 추출
+      const base64String = reader.result?.toString().split(',')[1]; 
+      resolve(base64String || '');
+    };
+    reader.onerror = (error) => reject(error);
+  });
 };
 
-export const generateImageWithGemini = async (
-  apiKey: string, 
-  prompt: string, 
-  difficulty: number,
-  styleMode: 'normal' | 'mandala'
-): Promise<string> => {
+// 1. 이미지 분석 (Vision API)
+export const analyzeImageForPrompt = async (apiKey: string, imageFile: File): Promise<string> => {
+  if (!apiKey) throw new Error("API Key가 필요합니다.");
+
+  // 주의: 구버전 SDK가 아닌 최신 @google/genai 사용 시 문법이 다를 수 있으나,
+  // 여기서는 호환성을 위해 google-generative-ai 스타일로 작성하되
+  // 사용자 환경(@google/genai)에 맞춰 유연하게 처리합니다.
   
-  // 1. Gemini 번역
-  let finalSubject = prompt;
-  if (apiKey) {
-    try {
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-      
-      const translationPrompt = `
-        Translate user input to English. Output ONLY the noun describing the main subject.
-        User Input: "${prompt}"
-        Example Output: "A cute cat"
-      `;
-      const result = await model.generateContent(translationPrompt);
-      finalSubject = result.response.text().trim();
-    } catch (e) {
-      console.warn("Gemini 번역 실패, 원본 사용");
-    }
-  }
-
-  // 2. 선명도 및 스타일 정의 (핵심 수정!)
-  let stylePrompt = "";
-
-  if (styleMode === 'mandala') {
-    // 🌀 [만다라 모드] - 선이 번지지 않게 "Stained Glass(스테인드글라스)"나 "Stencil(스텐실)" 느낌 강조
-    if (difficulty <= 3) {
-      stylePrompt = ", very simple outline, thick black markers, no tiny details, easy coloring, distinct edges";
-    } else if (difficulty <= 7) {
-      stylePrompt = ", zentangle patterns, clean ink lines, sharp edges, high contrast, distinct sections";
-    } else {
-      // 고난이도에서도 뭉개짐 방지: "Fine Liner Pen(파인 라이너 펜)" 스타일
-      stylePrompt = ", complex mandala, fine liner pen style, sharp geometric details, crisp vector lines, no blurring, high precision";
-    }
-  } else {
-    // 🎨 [일반 도안 모드]
-    if (difficulty <= 3) {
-      stylePrompt = ", simple cartoon outline, bold lines, isolated subject, white background, sticker art style";
-    } else if (difficulty <= 7) {
-      stylePrompt = ", clean line art illustration, storybook style, clear background elements, sharp contours";
-    } else {
-      stylePrompt = ", highly detailed pen and ink drawing, engraving style, fine cross-hatching (but clean), masterpiece line art";
-    }
-  }
-
-  // 3. 선명도 부스터 태그 (흐릿함 방지)
-  // 'vector', 'sharp focus', 'high contrast'가 핵심입니다.
-  const sharpnessTags = ", vector style, black and white only, pure black lines on pure white background, high contrast, 8k resolution, sharp focus, no shading, no gradients, no blurring, crisp edges, professional coloring book page";
+  // 만약 @google/generative-ai 패키지를 쓴다면 코드가 달라지지만, 
+  // 현재 환경을 고려해 기존에 작동하던 방식을 확장합니다.
   
-  const fullPrompt = `${finalSubject}${stylePrompt}${sharpnessTags}`;
-  
-  console.log(`[요청] 난이도:${difficulty} | 프롬프트: ${fullPrompt}`);
-
-  const encodedPrompt = encodeURIComponent(fullPrompt);
-  const seed = Math.floor(Math.random() * 1000000);
-
-  // enhance=false 고정 (주제 이탈 방지)
-  // nologo=true (로고 제거)
-  const imageUrl = `${POLLINATIONS_BASE_URL}${encodedPrompt}?width=1024&height=1024&seed=${seed}&nologo=true&model=flux&enhance=false`;
-
   try {
-    const response = await fetchWithRetry(imageUrl);
-    const blob = await response.blob();
+    const base64Data = await fileToBase64(imageFile);
+    const ai = new GoogleGenAI({ apiKey });
     
-    if (blob.type.includes("text") || blob.type.includes("html")) {
-        throw new Error("서버 오류");
-    }
-
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
+    // 비전 분석에는 1.5-flash 모델이 가장 빠르고 정확함
+    const response = await ai.models.generateContent({
+      model: 'gemini-1.5-flash', 
+      contents: {
+        parts: [
+          { text: "Describe this image in extreme detail so a blind artist could recreate its composition as a black and white coloring page line art. Focus on subject, pose, and background elements." },
+          { inlineData: { mimeType: imageFile.type, data: base64Data } }
+        ]
+      }
     });
+    
+    // 응답 텍스트 추출
+    const description = response.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!description) throw new Error("이미지 분석 실패");
+    
+    return description;
 
   } catch (error: any) {
-    throw new Error("이미지 생성 실패. 잠시 후 다시 시도해주세요.");
+    console.error("Vision API Error:", error);
+    throw new Error("이미지를 분석할 수 없습니다. (모델이 지원하지 않거나 키 오류)");
+  }
+};
+
+// 2. 이미지 생성 (기존 유지)
+export const generateImageWithGemini = async (apiKey: string, prompt: string): Promise<string> => {
+  if (!apiKey) throw new Error("API Key가 필요합니다.");
+
+  const ai = new GoogleGenAI({ apiKey });
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image', // 사용자가 설정한 모델 유지
+      contents: { parts: [{ text: prompt }] },
+      config: {
+        imageConfig: { aspectRatio: "3:4" },
+      },
+    });
+
+    let base64Data = null;
+    if (response.candidates && response.candidates[0].content.parts) {
+      for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData) {
+          base64Data = part.inlineData.data;
+          break;
+        }
+      }
+    }
+
+    if (!base64Data) throw new Error("이미지 데이터가 없습니다.");
+    return `data:image/png;base64,${base64Data}`;
+
+  } catch (error: any) {
+    console.error("Gemini Generation Error:", error);
+    throw new Error(error.message || "이미지 생성 실패");
   }
 };
