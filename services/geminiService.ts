@@ -1,51 +1,49 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export const generateImageWithGemini = async (apiKey: string, prompt: string): Promise<string> => {
-  // 1. Gemini 설정 (그림을 그리는 게 아니라, '프롬프트'를 영어로 멋지게 번역하는 역할)
+  // Gemini는 이제 복잡한 생각을 하지 않고, 단순 번역기로만 사용합니다.
   const genAI = new GoogleGenerativeAI(apiKey);
-  // 리스트에 있던 가장 안정적인 모델 사용
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" }); 
+  // 가장 빠르고 기초적인 모델 사용 (복잡한 창의성 불필요)
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); 
 
   try {
-    // 2. Gemini에게 "그림 주문서"를 작성하게 시킴
-    // 한글로 "공룡"이라고 해도, Gemini가 "coloring book page of a cute dinosaur..."로 번역해줍니다.
-    const textPrompt = `
-      Translate and enhance the following user prompt into a detailed English prompt for an AI image generator to create a coloring book page.
-      User Input: "${prompt}"
-      
-      Requirements for the output prompt:
-      - Subject: Clear and cute.
-      - Style: "Black and white line art", "coloring book page", "clean lines", "no shading", "white background".
-      - Quality: "High quality", "detailed", "vector style".
-      - Output: JUST the English prompt string. No explanations.
-    `;
+    // 1. Gemini에게 단순 영작 요청
+    // "공룡 그려줘" -> "A dinosaur" 정도로만 짧게 번역하게 합니다.
+    const textPrompt = `Translate the following text into English. Returns only the translated text, no explanations. Text: "${prompt}"`;
 
-    // 만약 Gemini 키가 없거나 에러가 나면, 그냥 입력된 텍스트를 그대로 씁니다.
-    let enhancedPrompt = prompt;
+    let translatedSubject = prompt; // API 키가 없거나 실패할 경우를 대비한 기본값
     try {
         if(apiKey) {
             const result = await model.generateContent(textPrompt);
-            enhancedPrompt = result.response.text().trim();
+            translatedSubject = result.response.text().trim();
         }
     } catch (e) {
-        console.warn("Gemini 프롬프트 생성 실패, 원본 사용:", e);
+        console.warn("Gemini 번역 실패, 원본 사용:", e);
     }
 
-    console.log("생성된 프롬프트:", enhancedPrompt);
+    console.log("번역된 주제:", translatedSubject);
 
-    // 3. Pollinations.ai (무료 이미지 생성 API) 호출
-    // 랜덤 시드(seed)를 추가하여 매번 다른 그림이 나오게 함
+    // 2. 프롬프트 강제 결합 (핵심!)
+    // AI에게 맡기지 않고, 코드가 직접 스타일 태그를 때려 박습니다.
+    // 이렇게 해야 '건물' 같은 엉뚱한 그림이 안 나옵니다.
+    const styleTags = ", coloring book page, black and white line art, no shading, white background, clean lines, vector style, minimalist";
+    const finalPrompt = translatedSubject + styleTags;
+
+    console.log("최종 요청 프롬프트:", finalPrompt);
+
+    // 3. Pollinations.ai 호출
     const seed = Math.floor(Math.random() * 1000000);
-    // URL에 설정을 포함시킵니다 (width, height, nologo 등)
-    const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(enhancedPrompt)}?width=1024&height=1024&seed=${seed}&nologo=true&model=flux`;
+    // model=flux를 제거하여 기본 모델(Stable Diffusion 계열)을 사용합니다. 선화에는 이게 더 안정적입니다.
+    // enhance=false를 추가하여 Pollinations가 제멋대로 프롬프트를 바꾸지 못하게 합니다.
+    const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}?width=768&height=1024&seed=${seed}&nologo=true&enhance=false`;
 
-    // 4. 이미지를 받아와서 웹앱에서 쓸 수 있는 데이터(Blob)로 변환
+    // 4. 이미지 받아오기
     const response = await fetch(imageUrl);
-    if (!response.ok) throw new Error("이미지 서버 응답 오류");
+    if (!response.ok) throw new Error(`이미지 서버 응답 오류: ${response.status}`);
 
     const blob = await response.blob();
-    
-    // Blob을 Base64 Data URL로 변환하여 반환
+    if (blob.type.includes("html")) throw new Error("이미지 생성 실패 (서버 과부하)");
+
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onloadend = () => resolve(reader.result as string);
@@ -55,6 +53,7 @@ export const generateImageWithGemini = async (apiKey: string, prompt: string): P
 
   } catch (error: any) {
     console.error("Image Generation Error:", error);
-    throw new Error("이미지 생성에 실패했습니다. 잠시 후 다시 시도해주세요.");
+    // 사용자에게 보여줄 친절한 에러 메시지
+    throw new Error("일시적인 이미지 서버 오류입니다. 3초 뒤에 다시 시도해주세요.");
   }
 };
