@@ -1,10 +1,10 @@
 import React from 'react';
-import { Settings, Key, Palette, Hash, Sliders, Brush, Circle } from 'lucide-react'; // Circle 아이콘 추가
+import { Settings, Key, Palette, Hash, Sliders, Brush, Circle, User, Mountain } from 'lucide-react'; // 아이콘 추가
 import { Button } from './Button';
 import { 
   MIN_IMAGE_COUNT, MAX_IMAGE_COUNT, 
   MIN_DIFFICULTY, MAX_DIFFICULTY, 
-  AppMode
+  AppMode, ArtStyle // ArtStyle 추가
 } from '../constants';
 
 interface SidebarProps {
@@ -13,10 +13,10 @@ interface SidebarProps {
   count: number; setCount: (count: number) => void;
   difficulty: number; setDifficulty: (level: number) => void;
   appMode: AppMode; setAppMode: (mode: AppMode) => void;
+  artStyle: ArtStyle; setArtStyle: (style: ArtStyle) => void; // [신규] 스타일 Props
   onGenerate: () => void;
   isGenerating: boolean;
   progressStatus?: string;
-  // hiddenCount 관련 props 삭제됨
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -25,16 +25,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
   count, setCount,
   difficulty, setDifficulty,
   appMode, setAppMode,
+  artStyle, setArtStyle, // [신규]
   onGenerate, isGenerating, progressStatus
 }) => {
   
   const getDifficultyLabel = (level: number) => {
     switch (level) {
-      case 1: return "1단계 (단순함)";
+      case 1: return "1단계 (유아용)";
       case 2: return "2단계 (쉬움)";
-      case 3: return "3단계 (보통)";
+      case 3: return "3단계 (보통 - 사실적)";
       case 4: return "4단계 (디테일)";
-      case 5: return "5단계 (복잡함)";
+      case 5: return "5단계 (전문가)";
       default: return `${level}단계`;
     }
   };
@@ -47,10 +48,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span className="bg-indigo-600 text-white p-1 rounded-md">AI</span>
             도안 생성기
           </h1>
-          <p className="text-slate-500 text-sm mt-1">색칠공부 & 만다라 만들기</p>
+          <p className="text-slate-500 text-sm mt-1">사실적인 고퀄리티 색칠공부</p>
         </div>
 
-        {/* 모드 선택 버튼 (색칠공부 vs 만다라) */}
+        {/* 모드 선택 */}
         <div className="flex p-1 bg-slate-100 rounded-lg">
           <button
             onClick={() => setAppMode(AppMode.COLORING)}
@@ -96,12 +97,45 @@ export const Sidebar: React.FC<SidebarProps> = ({
               type="text"
               value={theme}
               onChange={(e) => setTheme(e.target.value)}
-              placeholder={appMode === AppMode.COLORING ? "예: 숲속의 다람쥐" : "예: 꽃, 불꽃, 우주"}
+              placeholder="예: 숲속의 사슴, 오래된 성"
               className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
             />
           </div>
 
-          {/* 난이도 슬라이더 (모든 모드 공통 사용) */}
+          {/* [신규] 그림체 스타일 선택 (일반 도안 모드일 때만 표시) */}
+          {appMode === AppMode.COLORING && (
+            <div className="space-y-2">
+              <label className="flex items-center text-sm font-semibold text-slate-700">
+                <Settings className="w-4 h-4 mr-2" />
+                그림체 스타일
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setArtStyle(ArtStyle.CHARACTER)}
+                  className={`flex flex-col items-center justify-center p-3 border rounded-lg transition-all ${
+                    artStyle === ArtStyle.CHARACTER 
+                      ? 'border-indigo-600 bg-indigo-50 text-indigo-700' 
+                      : 'border-slate-200 hover:border-slate-300 text-slate-600'
+                  }`}
+                >
+                  <User className="w-5 h-5 mb-1" />
+                  <span className="text-xs font-medium">인물/캐릭터</span>
+                </button>
+                <button
+                  onClick={() => setArtStyle(ArtStyle.LANDSCAPE)}
+                  className={`flex flex-col items-center justify-center p-3 border rounded-lg transition-all ${
+                    artStyle === ArtStyle.LANDSCAPE 
+                      ? 'border-indigo-600 bg-indigo-50 text-indigo-700' 
+                      : 'border-slate-200 hover:border-slate-300 text-slate-600'
+                  }`}
+                >
+                  <Mountain className="w-5 h-5 mb-1" />
+                  <span className="text-xs font-medium">풍경/배경</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <label className="flex items-center text-sm font-semibold text-slate-700">
@@ -120,17 +154,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               onChange={(e) => setDifficulty(parseInt(e.target.value))}
               className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
             />
-            <p className="text-xs text-slate-500">
-              {appMode === AppMode.MANDALA 
-                ? "낮을수록 패턴이 크고 단순하며, 높을수록 아주 세밀해집니다." 
-                : "1단계는 유아용, 5단계는 전문가용 수준입니다."}
-            </p>
           </div>
 
           <div className="space-y-2">
             <label className="flex items-center text-sm font-semibold text-slate-700">
               <Hash className="w-4 h-4 mr-2" />
-              생성할 장수 (최대 {MAX_IMAGE_COUNT}장)
+              생성할 장수
             </label>
             <input
               type="number"
@@ -150,16 +179,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {isGenerating ? (
               <span className="text-sm">{progressStatus || '생성 중...'}</span>
             ) : (
-              appMode === AppMode.COLORING ? '도안 생성하기' : '만다라 생성하기'
+              '도안 생성하기'
             )}
           </Button>
-        </div>
-
-        <div className="pt-4 border-t border-slate-100 text-xs text-slate-500">
-          <div className="flex items-start gap-2 bg-slate-50 p-3 rounded-lg">
-             <Settings className="w-4 h-4 flex-shrink-0 mt-0.5" />
-             <p>팁: 만다라 모드에서 '난이도 5'를 선택하면 명상용 힐링 아트가 생성됩니다.</p>
-          </div>
         </div>
       </div>
     </aside>
