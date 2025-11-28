@@ -14,7 +14,9 @@ import {
   LOCAL_STORAGE_KEY_API, 
   DEFAULT_DIFFICULTY,
   COLORING_PROMPT_TEMPLATE
-} from './constants';
+}
+import { jsPDF } from "jspdf";
+from './constants';
 
 const App: React.FC = () => {
   // State
@@ -147,7 +149,38 @@ const App: React.FC = () => {
 
   const hasImages = images.length > 0;
   const selectedCount = images.filter(i => i.isSelected).length;
+// --- [PDF 저장 함수 시작] ---
+  const handleDownloadPDF = () => {
+    // 1. 현재 화면에 보이는 이미지가 있는지 확인
+    // (주의: 'images' 라는 변수명이 다르면 'generatedImages' 등으로 바꿔주세요!)
+    const currentImage = images[selectedImageIndex]; 
 
+    if (!currentImage) {
+      alert("먼저 도안을 생성하고 선택해주세요!");
+      return;
+    }
+
+    try {
+      const pdf = new jsPDF('p', 'mm', 'a4'); // A4 용지 생성
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      
+      // 여백 10mm
+      const margin = 10;
+      const imgWidth = pageWidth - (margin * 2);
+      const imgHeight = imgWidth; // 정사각형 이미지
+
+      // 이미지 추가
+      pdf.addImage(currentImage, 'PNG', margin, margin, imgWidth, imgHeight);
+      
+      // 파일 저장
+      pdf.save("나만의_색칠공부.pdf");
+
+    } catch (error) {
+      console.error("PDF 저장 에러:", error);
+      alert("PDF 저장 중 문제가 발생했습니다.");
+    }
+  };
+  // --- [PDF 저장 함수 끝] ---
   return (
     <div className="flex flex-col lg:flex-row min-h-screen bg-slate-50">
       <Sidebar 
