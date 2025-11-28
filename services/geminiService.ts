@@ -25,18 +25,17 @@ export const generateImageWithGemini = async (
   styleMode: 'normal' | 'mandala'
 ): Promise<string> => {
   
-  // 1. Gemini 번역: 오직 "시각적 주제"만 영어로 번역
+  // 1. Gemini 번역
   let finalSubject = prompt;
   if (apiKey) {
     try {
       const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
       
-      // 번역할 때 "풍경"이나 "건물" 같은 단어를 멋대로 넣지 못하게 방어
       const translationPrompt = `
-        Translate the user input into a simple English noun phrase describing the main subject.
+        Translate user input to English. Output ONLY the noun describing the main subject.
         User Input: "${prompt}"
-        Output example: "A cute cat in a spacesuit" (No extra words)
+        Example Output: "A cute cat"
       `;
       const result = await model.generateContent(translationPrompt);
       finalSubject = result.response.text().trim();
@@ -45,57 +44,43 @@ export const generateImageWithGemini = async (
     }
   }
 
-  // 2. 모드 및 난이도별 "강력한" 프롬프트 설계
-  let coreStructure = ""; // 주제를 어떻게 배치할지 결정
+  // 2. 선명도 및 스타일 정의 (핵심 수정!)
+  let stylePrompt = "";
 
   if (styleMode === 'mandala') {
-    // 🌀 [만다라 모드]
-    // 주제 형태 안에 패턴을 채우는 방식
-    coreStructure = `Vector line art of ${finalSubject}, filled with `;
-    
+    // 🌀 [만다라 모드] - 선이 번지지 않게 "Stained Glass(스테인드글라스)"나 "Stencil(스텐실)" 느낌 강조
     if (difficulty <= 3) {
-      coreStructure += "very simple big geometric shapes, thick lines, easy coloring";
+      stylePrompt = ", very simple outline, thick black markers, no tiny details, easy coloring, distinct edges";
     } else if (difficulty <= 7) {
-      coreStructure += "mandala patterns, zentangle details, floral elements";
+      stylePrompt = ", zentangle patterns, clean ink lines, sharp edges, high contrast, distinct sections";
     } else {
-      coreStructure += "extremely complex microscopic mandala patterns, intricate lace design, masterpiece";
+      // 고난이도에서도 뭉개짐 방지: "Fine Liner Pen(파인 라이너 펜)" 스타일
+      stylePrompt = ", complex mandala, fine liner pen style, sharp geometric details, crisp vector lines, no blurring, high precision";
     }
   } else {
-    // 🎨 [일반 도안 모드] - 여기가 문제였음!
-    // 주제를 "Portrait(초상화)"나 "Character(캐릭터)"로 정의해서 배경이 주가 되는 것을 막음.
-    
-    if (difficulty <= 2) {
-      // [난이도 1-2] 배경 완전 삭제, 캐릭터만 빡!
-      coreStructure = `A simple cute outline drawing of ${finalSubject}, isolated on white background, thick lines, no background, minimal details, sticker style`;
-    } else if (difficulty <= 4) {
-      // [난이도 3-4] 약간의 장식
-      coreStructure = `A coloring book page of ${finalSubject}, simple cartoon style, clean lines, white background, very few background details`;
-    } else if (difficulty <= 6) {
-      // [난이도 5-6] 표준 도안
-      coreStructure = `A clear line art illustration of ${finalSubject}, centered composition, standard coloring book style, distinct lines`;
-    } else if (difficulty <= 8) {
-      // [난이도 7-8] 배경 추가 (단, 주제 뒤에)
-      coreStructure = `A detailed professional illustration of ${finalSubject}, with background scenery behind the subject, dynamic pose, crisp line art`;
+    // 🎨 [일반 도안 모드]
+    if (difficulty <= 3) {
+      stylePrompt = ", simple cartoon outline, bold lines, isolated subject, white background, sticker art style";
+    } else if (difficulty <= 7) {
+      stylePrompt = ", clean line art illustration, storybook style, clear background elements, sharp contours";
     } else {
-      // [난이도 9-10] 복잡한 묘사
-      coreStructure = `A masterpiece engraving style drawing of ${finalSubject}, highly detailed textures, complex background filling the page, fine ink lines`;
+      stylePrompt = ", highly detailed pen and ink drawing, engraving style, fine cross-hatching (but clean), masterpiece line art";
     }
   }
 
-  // 3. 공통 "도면" 방지 태그
-  // 'architecture', 'building' 등이 나오지 않도록 'organic', 'character design' 등의 뉘앙스 추가
-  const safetyTags = ", coloring book, black and white, uncolored, no shading, high contrast, clean white background";
+  // 3. 선명도 부스터 태그 (흐릿함 방지)
+  // 'vector', 'sharp focus', 'high contrast'가 핵심입니다.
+  const sharpnessTags = ", vector style, black and white only, pure black lines on pure white background, high contrast, 8k resolution, sharp focus, no shading, no gradients, no blurring, crisp edges, professional coloring book page";
   
-  // 최종 프롬프트 결합
-  const fullPrompt = `${coreStructure}${safetyTags}`;
+  const fullPrompt = `${finalSubject}${stylePrompt}${sharpnessTags}`;
   
   console.log(`[요청] 난이도:${difficulty} | 프롬프트: ${fullPrompt}`);
 
   const encodedPrompt = encodeURIComponent(fullPrompt);
   const seed = Math.floor(Math.random() * 1000000);
 
-  // ⭐ 핵심 수정: enhance=false 고정!
-  // AI가 멋대로 "풍경화"로 바꾸는 것을 원천 차단합니다.
+  // enhance=false 고정 (주제 이탈 방지)
+  // nologo=true (로고 제거)
   const imageUrl = `${POLLINATIONS_BASE_URL}${encodedPrompt}?width=1024&height=1024&seed=${seed}&nologo=true&model=flux&enhance=false`;
 
   try {
