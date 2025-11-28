@@ -2,7 +2,6 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const POLLINATIONS_BASE_URL = "https://image.pollinations.ai/prompt/";
 
-// 재시도 헬퍼 함수
 const fetchWithRetry = async (url: string, retries: number = 3, delayMs: number = 2000): Promise<Response> => {
   for (let i = 0; i < retries; i++) {
     try {
@@ -26,17 +25,18 @@ export const generateImageWithGemini = async (
   styleMode: 'normal' | 'mandala'
 ): Promise<string> => {
   
-  // 1. Gemini 번역: "주제"만 명확하게 뽑아내도록 지시
+  // 1. Gemini 번역: 오직 "시각적 주제"만 영어로 번역
   let finalSubject = prompt;
   if (apiKey) {
     try {
       const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
       
+      // 번역할 때 "풍경"이나 "건물" 같은 단어를 멋대로 넣지 못하게 방어
       const translationPrompt = `
-        Translate the user's input into a concise English description of the VISUAL SUBJECT only. 
-        Do NOT add any style keywords like "coloring book" or "line art". Just describe the object/scene.
+        Translate the user input into a simple English noun phrase describing the main subject.
         User Input: "${prompt}"
+        Output example: "A cute cat in a spacesuit" (No extra words)
       `;
       const result = await model.generateContent(translationPrompt);
       finalSubject = result.response.text().trim();
@@ -45,55 +45,58 @@ export const generateImageWithGemini = async (
     }
   }
 
-  // 2. 난이도 및 스타일 정밀 세분화 (5단계 시스템)
-  let stylePrompt = "";
+  // 2. 모드 및 난이도별 "강력한" 프롬프트 설계
+  let coreStructure = ""; // 주제를 어떻게 배치할지 결정
 
   if (styleMode === 'mandala') {
-    // 🌀 [만다라 모드] - 패턴의 밀도 조절
-    if (difficulty <= 2) {
-      stylePrompt = ", very simple outline, big shapes, minimal patterns, thick lines, easy for toddlers, white background";
-    } else if (difficulty <= 4) {
-      stylePrompt = ", simple zentangle patterns, distinct sections, clean lines, fun patterns, easy coloring";
-    } else if (difficulty <= 6) {
-      stylePrompt = ", medium complexity mandala, floral and geometric patterns inside, standard adult coloring book style";
-    } else if (difficulty <= 8) {
-      stylePrompt = ", intricate mandala design, fine details, lace-like patterns, complex zentangle, dense composition";
+    // 🌀 [만다라 모드]
+    // 주제 형태 안에 패턴을 채우는 방식
+    coreStructure = `Vector line art of ${finalSubject}, filled with `;
+    
+    if (difficulty <= 3) {
+      coreStructure += "very simple big geometric shapes, thick lines, easy coloring";
+    } else if (difficulty <= 7) {
+      coreStructure += "mandala patterns, zentangle details, floral elements";
     } else {
-      stylePrompt = ", extreme complexity, microscopic mandala patterns, hyper-detailed, masterpiece, ultra-fine lines, kaleidoscope effect, no empty spaces";
+      coreStructure += "extremely complex microscopic mandala patterns, intricate lace design, masterpiece";
     }
   } else {
-    // 🎨 [일반 도안 모드] - 배경과 묘사의 사실성 조절
+    // 🎨 [일반 도안 모드] - 여기가 문제였음!
+    // 주제를 "Portrait(초상화)"나 "Character(캐릭터)"로 정의해서 배경이 주가 되는 것을 막음.
+    
     if (difficulty <= 2) {
-      stylePrompt = ", simple cartoon icon, very thick outlines, isolated subject, white background, no background details, for preschool";
+      // [난이도 1-2] 배경 완전 삭제, 캐릭터만 빡!
+      coreStructure = `A simple cute outline drawing of ${finalSubject}, isolated on white background, thick lines, no background, minimal details, sticker style`;
     } else if (difficulty <= 4) {
-      stylePrompt = ", cute character illustration, simple background elements (clouds, stars), standard line weight, clear shapes, storybook style";
+      // [난이도 3-4] 약간의 장식
+      coreStructure = `A coloring book page of ${finalSubject}, simple cartoon style, clean lines, white background, very few background details`;
     } else if (difficulty <= 6) {
-      stylePrompt = ", detailed illustration, full scene background (forest/city/space), realistic proportions, standard coloring book page, crisp lines";
+      // [난이도 5-6] 표준 도안
+      coreStructure = `A clear line art illustration of ${finalSubject}, centered composition, standard coloring book style, distinct lines`;
     } else if (difficulty <= 8) {
-      stylePrompt = ", highly detailed pen drawing, textured fur/scales/feathers, complex background scenery, dynamic shading with lines, fine art style";
+      // [난이도 7-8] 배경 추가 (단, 주제 뒤에)
+      coreStructure = `A detailed professional illustration of ${finalSubject}, with background scenery behind the subject, dynamic pose, crisp line art`;
     } else {
-      stylePrompt = ", hyper-realistic engraving style, extremely complex details, dense foliage/architecture, masterpiece illustration, museum quality line art, barely any empty white space";
+      // [난이도 9-10] 복잡한 묘사
+      coreStructure = `A masterpiece engraving style drawing of ${finalSubject}, highly detailed textures, complex background filling the page, fine ink lines`;
     }
   }
 
-  // 3. 주제 이탈 방지를 위한 프롬프트 구조화
-  // Subject를 맨 앞에 배치하고, 가중치를 주는 느낌으로 강조
-  // stylePrompt와 공통 태그를 뒤에 붙임
-  const commonTags = ", black and white, line art only, uncolored, vector style, no shading, no grayscale, high contrast";
+  // 3. 공통 "도면" 방지 태그
+  // 'architecture', 'building' 등이 나오지 않도록 'organic', 'character design' 등의 뉘앙스 추가
+  const safetyTags = ", coloring book, black and white, uncolored, no shading, high contrast, clean white background";
   
-  // (중요) 프롬프트 순서: [주제] + [스타일/난이도] + [공통규칙]
-  const fullPrompt = `${finalSubject}${stylePrompt}${commonTags}`;
+  // 최종 프롬프트 결합
+  const fullPrompt = `${coreStructure}${safetyTags}`;
   
-  console.log(`[생성 요청] 난이도:${difficulty} | 프롬프트: ${fullPrompt}`);
+  console.log(`[요청] 난이도:${difficulty} | 프롬프트: ${fullPrompt}`);
 
   const encodedPrompt = encodeURIComponent(fullPrompt);
   const seed = Math.floor(Math.random() * 1000000);
 
-  // enhance=false로 변경: AI가 제멋대로 해석해서 엉뚱한 그림(건물 등)을 그리는 것을 방지하고, 우리가 짠 프롬프트를 따르게 함
-  // 단, 난이도가 높을 때(8 이상)는 enhance=true가 더 좋은 퀄리티를 줄 수도 있으므로 동적으로 처리
-  const useEnhance = difficulty >= 8; 
-  
-  const imageUrl = `${POLLINATIONS_BASE_URL}${encodedPrompt}?width=1024&height=1024&seed=${seed}&nologo=true&model=flux&enhance=${useEnhance}`;
+  // ⭐ 핵심 수정: enhance=false 고정!
+  // AI가 멋대로 "풍경화"로 바꾸는 것을 원천 차단합니다.
+  const imageUrl = `${POLLINATIONS_BASE_URL}${encodedPrompt}?width=1024&height=1024&seed=${seed}&nologo=true&model=flux&enhance=false`;
 
   try {
     const response = await fetchWithRetry(imageUrl);
