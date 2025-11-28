@@ -13,6 +13,7 @@ import {
   LOCAL_STORAGE_KEY_API, 
   DEFAULT_DIFFICULTY,
   AppMode,
+  ArtStyle, // ArtStyle 추가
   COLORING_PROMPT_TEMPLATE,
   MANDALA_PROMPT_TEMPLATE
 } from './constants';
@@ -24,6 +25,7 @@ const App: React.FC = () => {
   const [count, setCount] = useState<number>(DEFAULT_IMAGE_COUNT);
   const [difficulty, setDifficulty] = useState<number>(DEFAULT_DIFFICULTY);
   const [appMode, setAppMode] = useState<AppMode>(AppMode.COLORING);
+  const [artStyle, setArtStyle] = useState<ArtStyle>(ArtStyle.CHARACTER); // [신규] 스타일 상태 추가
   
   const [images, setImages] = useState<ColoringPage[]>([]);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
@@ -47,14 +49,15 @@ const App: React.FC = () => {
     id: string, 
     currentTheme: string, 
     difficultyLevel: number,
-    mode: AppMode
+    mode: AppMode,
+    style: ArtStyle // [신규] 스타일 인자 추가
   ) => {
     try {
       let prompt = "";
 
-      // 모드에 따라 프롬프트 분기 처리
       if (mode === AppMode.COLORING) {
-        prompt = COLORING_PROMPT_TEMPLATE(currentTheme, difficultyLevel);
+        // [변경] 스타일 정보도 함께 전달
+        prompt = COLORING_PROMPT_TEMPLATE(currentTheme, difficultyLevel, style);
       } else if (mode === AppMode.MANDALA) {
         prompt = MANDALA_PROMPT_TEMPLATE(currentTheme, difficultyLevel);
       }
@@ -79,7 +82,6 @@ const App: React.FC = () => {
     if (!theme) return alert("주제를 입력해주세요.");
 
     setIsGenerating(true);
-    setProgressStatus(`준비 중...`);
     
     const newImages: ColoringPage[] = Array.from({ length: count }).map(() => ({
       id: uuidv4(),
@@ -94,13 +96,13 @@ const App: React.FC = () => {
     for (let i = 0; i < newImages.length; i++) {
       const img = newImages[i];
       
-      const modeName = appMode === AppMode.MANDALA ? "만다라" : "도안";
-      setProgressStatus(`${modeName} 그리는 중... (${i + 1}/${count})`);
+      setProgressStatus(`도안 생성 중 (${i + 1}/${count})`);
       
-      await generateSingleSlot(img.id, theme, difficulty, appMode);
+      // [변경] artStyle 상태 전달
+      await generateSingleSlot(img.id, theme, difficulty, appMode, artStyle);
 
       if (i < newImages.length - 1) {
-        await delay(1500); // Quota 제한 방지
+        await delay(1500);
       }
     }
     
@@ -119,8 +121,9 @@ const App: React.FC = () => {
     ));
 
     for (let i = 0; i < selectedIds.length; i++) {
-      setProgressStatus(`재생성 중... (${i + 1}/${selectedIds.length})`);
-      await generateSingleSlot(selectedIds[i], theme, difficulty, appMode);
+      setProgressStatus(`재생성 중 (${i + 1}/${selectedIds.length})`);
+      // [변경] artStyle 상태 전달
+      await generateSingleSlot(selectedIds[i], theme, difficulty, appMode, artStyle);
       if (i < selectedIds.length - 1) await delay(1500);
     }
 
@@ -144,7 +147,7 @@ const App: React.FC = () => {
     setImages(prev => prev.map(img => 
         img.id === id ? { ...img, isLoading: true, error: null } : img
     ));
-    generateSingleSlot(id, theme, difficulty, appMode);
+    generateSingleSlot(id, theme, difficulty, appMode, artStyle);
   };
 
   const hasImages = images.length > 0;
@@ -158,6 +161,7 @@ const App: React.FC = () => {
         count={count} setCount={setCount}
         difficulty={difficulty} setDifficulty={setDifficulty}
         appMode={appMode} setAppMode={setAppMode}
+        artStyle={artStyle} setArtStyle={setArtStyle} // [신규] 전달
         onGenerate={handleGenerate}
         isGenerating={isGenerating}
         progressStatus={progressStatus}
