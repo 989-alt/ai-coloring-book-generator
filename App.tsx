@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Download, RefreshCw, Trash2 } from 'lucide-react';
+import { Download, RefreshCw, Trash2, Brush } from 'lucide-react';
 
 import { Sidebar } from './components/Sidebar';
 import { ImageCard } from './components/ImageCard';
@@ -12,11 +12,7 @@ import {
   DEFAULT_IMAGE_COUNT, 
   LOCAL_STORAGE_KEY_API, 
   DEFAULT_DIFFICULTY,
-  AppMode,
-  DEFAULT_HIDDEN_ITEMS,
-  COLORING_PROMPT_TEMPLATE,
-  HIDDEN_PROMPT_TEMPLATE,
-  HIDDEN_ITEM_POOL
+  COLORING_PROMPT_TEMPLATE
 } from './constants';
 
 const App: React.FC = () => {
@@ -25,8 +21,6 @@ const App: React.FC = () => {
   const [theme, setTheme] = useState<string>('');
   const [count, setCount] = useState<number>(DEFAULT_IMAGE_COUNT);
   const [difficulty, setDifficulty] = useState<number>(DEFAULT_DIFFICULTY);
-  const [appMode, setAppMode] = useState<AppMode>(AppMode.COLORING);
-  const [hiddenCount, setHiddenCount] = useState<number>(DEFAULT_HIDDEN_ITEMS);
   
   const [images, setImages] = useState<ColoringPage[]>([]);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
@@ -45,40 +39,23 @@ const App: React.FC = () => {
 
   const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-  // Helper: Randomly select unique items
-  const getRandomItems = (count: number): string[] => {
-    const shuffled = [...HIDDEN_ITEM_POOL].sort(() => 0.5 - Math.random());
-    return shuffled.slice(0, count);
-  };
-
   // Helper: Generate Single Slot
   const generateSingleSlot = async (
     id: string, 
     currentTheme: string, 
-    difficultyLevel: number,
-    mode: AppMode,
-    hiddenItemsCount: number
+    difficultyLevel: number
   ) => {
     try {
-      let prompt = "";
-      let selectedItems: string[] = [];
-
-      if (mode === AppMode.COLORING) {
-        prompt = COLORING_PROMPT_TEMPLATE(currentTheme, difficultyLevel);
-      } else {
-        selectedItems = getRandomItems(hiddenItemsCount);
-        prompt = HIDDEN_PROMPT_TEMPLATE(currentTheme, selectedItems);
-      }
-
+      const prompt = COLORING_PROMPT_TEMPLATE(currentTheme, difficultyLevel);
       const url = await generateImageWithGemini(apiKey, prompt);
       
       setImages(prev => prev.map(img => 
-        img.id === id ? { ...img, isLoading: false, url, error: null, hiddenItems: selectedItems.length > 0 ? selectedItems : undefined } : img
+        img.id === id ? { ...img, isLoading: false, url, error: null } : img
       ));
       return true;
     } catch (error: any) {
       setImages(prev => prev.map(img => 
-        img.id === id ? { ...img, isLoading: false, error: "생성 실패", url: null } : img
+        img.id === id ? { ...img, isLoading: false, error: error.message || "생성 실패", url: null } : img
       ));
       return false;
     }
@@ -90,7 +67,6 @@ const App: React.FC = () => {
     if (!theme) return alert("주제를 입력해주세요.");
 
     setIsGenerating(true);
-    setProgressStatus(`준비 중...`);
     
     const newImages: ColoringPage[] = Array.from({ length: count }).map(() => ({
       id: uuidv4(),
@@ -104,14 +80,9 @@ const App: React.FC = () => {
 
     for (let i = 0; i < newImages.length; i++) {
       const img = newImages[i];
+      setProgressStatus(`도안 그리는 중... (${i + 1}/${count})`);
       
-      if (appMode === AppMode.HIDDEN_OBJECTS) {
-        setProgressStatus(`AI가 보물을 숨기는 중... (${i + 1}/${count})`);
-      } else {
-        setProgressStatus(`도안 그리는 중... (${i + 1}/${count})`);
-      }
-      
-      await generateSingleSlot(img.id, theme, difficulty, appMode, hiddenCount);
+      await generateSingleSlot(img.id, theme, difficulty);
 
       if (i < newImages.length - 1) {
         await delay(1500); // 1.5s delay for Quota safety
@@ -134,7 +105,7 @@ const App: React.FC = () => {
 
     for (let i = 0; i < selectedIds.length; i++) {
       setProgressStatus(`재생성 중... (${i + 1}/${selectedIds.length})`);
-      await generateSingleSlot(selectedIds[i], theme, difficulty, appMode, hiddenCount);
+      await generateSingleSlot(selectedIds[i], theme, difficulty);
       if (i < selectedIds.length - 1) await delay(1500);
     }
 
@@ -158,7 +129,7 @@ const App: React.FC = () => {
     setImages(prev => prev.map(img => 
         img.id === id ? { ...img, isLoading: true, error: null } : img
     ));
-    generateSingleSlot(id, theme, difficulty, appMode, hiddenCount);
+    generateSingleSlot(id, theme, difficulty);
   };
 
   const hasImages = images.length > 0;
@@ -171,8 +142,6 @@ const App: React.FC = () => {
         theme={theme} setTheme={setTheme}
         count={count} setCount={setCount}
         difficulty={difficulty} setDifficulty={setDifficulty}
-        appMode={appMode} setAppMode={setAppMode}
-        hiddenCount={hiddenCount} setHiddenCount={setHiddenCount}
         onGenerate={handleGenerate}
         isGenerating={isGenerating}
         progressStatus={progressStatus}
@@ -208,7 +177,7 @@ const App: React.FC = () => {
         {!hasImages && !isGenerating && (
           <div className="h-[60vh] flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl">
             <div className="bg-white p-6 rounded-full shadow-sm mb-4">
-              <Trash2 className="w-12 h-12 text-slate-300" />
+              <Brush className="w-12 h-12 text-slate-300" />
             </div>
             <h2 className="text-xl font-semibold text-slate-600 mb-2">도안이 없습니다</h2>
             <p>왼쪽 메뉴에서 주제를 입력하고 도안을 생성해보세요.</p>
