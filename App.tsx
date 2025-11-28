@@ -13,7 +13,7 @@ import {
   LOCAL_STORAGE_KEY_API, 
   DEFAULT_DIFFICULTY,
   AppMode,
-  ArtStyle, // 이 부분이 중요합니다
+  ArtStyle, 
   COLORING_PROMPT_TEMPLATE,
   MANDALA_PROMPT_TEMPLATE
 } from './constants';
@@ -25,7 +25,7 @@ const App: React.FC = () => {
   const [count, setCount] = useState<number>(DEFAULT_IMAGE_COUNT);
   const [difficulty, setDifficulty] = useState<number>(DEFAULT_DIFFICULTY);
   const [appMode, setAppMode] = useState<AppMode>(AppMode.COLORING);
-  const [artStyle, setArtStyle] = useState<ArtStyle>(ArtStyle.CHARACTER); // 상태 추가
+  const [artStyle, setArtStyle] = useState<ArtStyle>(ArtStyle.CHARACTER);
   
   const [images, setImages] = useState<ColoringPage[]>([]);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
@@ -158,7 +158,7 @@ const App: React.FC = () => {
         count={count} setCount={setCount}
         difficulty={difficulty} setDifficulty={setDifficulty}
         appMode={appMode} setAppMode={setAppMode}
-        artStyle={artStyle} setArtStyle={setArtStyle} // 여기에 꼭 전달해야 함!
+        artStyle={artStyle} setArtStyle={setArtStyle}
         onGenerate={handleGenerate}
         isGenerating={isGenerating}
         progressStatus={progressStatus}
