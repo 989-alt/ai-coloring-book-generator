@@ -6,7 +6,7 @@ export const DEFAULT_DIFFICULTY = 3;
 export const MIN_DIFFICULTY = 1;
 export const MAX_DIFFICULTY = 5;
 
-// [필수] 그림체 스타일 정의
+// [중요] App.tsx와 Sidebar.tsx에서 사용하는 Enum 정의
 export enum ArtStyle {
   CHARACTER = 'character',
   LANDSCAPE = 'landscape'
