@@ -1,0 +1,5 @@
+{
+  "name": "AI Coloring Book Generator",
+  "description": "A Korean-language tool to generate printable coloring pages using Google Gemini.",
+  "requestFramePermissions": []
+}
