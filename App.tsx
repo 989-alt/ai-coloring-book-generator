@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Download, RefreshCw, Trash2, Brush } from 'lucide-react';
@@ -84,8 +85,13 @@ const App: React.FC = () => {
       
       await generateSingleSlot(img.id, theme, difficulty);
 
+      // Add a long delay between requests to avoid 429 errors (Free Tier Image Generation Limit)
       if (i < newImages.length - 1) {
-        await delay(1500); // 1.5s delay for Quota safety
+        const waitTime = 20; // 20 seconds
+        for (let t = waitTime; t > 0; t--) {
+             setProgressStatus(`다음 장 준비 중... (${t}초 대기)`);
+             await delay(1000);
+        }
       }
     }
     
@@ -106,7 +112,14 @@ const App: React.FC = () => {
     for (let i = 0; i < selectedIds.length; i++) {
       setProgressStatus(`재생성 중... (${i + 1}/${selectedIds.length})`);
       await generateSingleSlot(selectedIds[i], theme, difficulty);
-      if (i < selectedIds.length - 1) await delay(1500);
+      
+      if (i < selectedIds.length - 1) {
+        const waitTime = 20;
+        for (let t = waitTime; t > 0; t--) {
+             setProgressStatus(`다음 장 준비 중... (${t}초 대기)`);
+             await delay(1000);
+        }
+      }
     }
 
     setIsGenerating(false);
