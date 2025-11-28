@@ -14,12 +14,19 @@ export const generateImageWithGemini = async (apiKey: string, prompt: string): P
   });
 
   // 3. 프롬프트 강화: SVG 코드 생성 및 마크다운 제거 요청
-  const modifiedPrompt = `${prompt}. 
-  Please create a clean, black and white line art coloring page for children.
-  IMPORTANT: Return ONLY valid SVG code. 
-  Do not use markdown code blocks (like \`\`\`xml). 
-  Start directly with <svg ...> and end with </svg>.
-  Make sure to include a white background: <rect width="100%" height="100%" fill="white"/>.`;
+  const modifiedPrompt = `You are an expert SVG artist creating a high-quality coloring book page for children.
+    User request: "${prompt}".
+
+    CRITICAL RULES FOR HIGH QUALITY:
+    1. **Complexity:** Do NOT create simple or empty drawings. The page must be FULLY filled.
+    2. **Background:** You MUST include a detailed background (e.g., trees, clouds, patterns, flowers, stars). No empty white space allowed around the main subject.
+    3. **Style:** Use "Zentangle" or "Mandala" style elements for fur, leaves, and textures to make it fun to color.
+    4. **Lines:** Use strictly BLACK strokes (stroke="black"). Line width should be consistent (stroke-width="1.5" or "2"). All paths must be closed.
+    5. **Format:** Return ONLY valid, clean SVG code. Start with <svg viewBox="0 0 512 512" ...>.
+    
+    Make the drawing look like a professional illustration, not a simple icon.
+    Ensure the first element is a white background: <rect width="100%" height="100%" fill="white"/>.
+  `;
 
   try {
     // 4. 요청 보내기
