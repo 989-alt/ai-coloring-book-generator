@@ -2,10 +2,15 @@ export const DEFAULT_IMAGE_COUNT = 3;
 export const MAX_IMAGE_COUNT = 5;
 export const MIN_IMAGE_COUNT = 1;
 
-// 난이도 1~5 단계 설정
 export const DEFAULT_DIFFICULTY = 3;
 export const MIN_DIFFICULTY = 1;
 export const MAX_DIFFICULTY = 5;
+
+// [신규] 그림체 스타일 정의 (인물 vs 풍경)
+export enum ArtStyle {
+  CHARACTER = 'character', // 인물/캐릭터 중심
+  LANDSCAPE = 'landscape'  // 배경/풍경 중심
+}
 
 export enum AppMode {
   COLORING = 'coloring',
@@ -14,89 +19,73 @@ export enum AppMode {
 
 export const LOCAL_STORAGE_KEY_API = 'gemini_coloring_api_key';
 
-// [핵심 1] 퀄리티 & 복잡도 향상을 위한 난이도별 스타일 정의
-// 기존의 단순한 'Level' 개념을 넘어 '예술 기법'을 차등 적용
+// 난이도별 묘사 수준 (공통)
 const getDifficultyKeywords = (level: number): string => {
   switch (level) {
-    case 1: 
-      // 1단계: 단순하지만 '고품질' 유지 (유아용)
-      return "Toddler Art. Bold, uniform thick lines (marker style). Single central subject. No background. Large distinct shapes for easy coloring. Cute and rounded realism.";
-    case 2: 
-      // 2단계: 깔끔한 라인 (저학년)
-      return "Clean Line Art. Medium line weight. Clear distinct outlines. Minimal background context. Focus on character/object clarity with slight realistic textures.";
-    case 3: 
-      // 3단계: 표준 (세밀화 시작)
-      return "Standard Illustration. Balanced detail. Combination of thick outer lines and thin inner details. Full scene composition. Realistic proportions and natural poses.";
-    case 4: 
-      // 4단계: 고밀도 (성인 취미용)
-      return "Intricate Etching Style. High density details. Use 'Hatching' and 'Stippling' for texture (but keep it black & white). Rich background scenery. Realistic botanical/anatomical accuracy.";
-    case 5: 
-      // 5단계: 초고밀도 (전문가용 마스터피스)
-      return "Masterpiece Engraving. Extremely complex and dense. 'Horror Vacui' style (filling every space with detail). Fine art pen-and-ink quality. Micro-patterns on every surface. Hyper-realistic texture rendering.";
-    default: 
-      return "Standard coloring book style";
+    case 1: return "Toddler Level. Simple clear outlines. No background. Large shapes.";
+    case 2: return "Easy Level. Distinct lines. Minimal shading. Clear subject focus.";
+    case 3: return "Standard Level. Realistic proportions. Balanced detail and texture.";
+    case 4: return "High Detail. Intricate etching style. Fine hatching lines for shadow.";
+    case 5: return "Masterpiece Level. Hyper-realistic engraving style. Extreme micro-details.";
+    default: return "Standard style";
   }
 };
 
-// [핵심 2] 현실성(Realism)과 창의성(Creativity)의 균형을 잡는 공통 룰
-const QUALITY_RULES = `
-[VISUAL QUALITY RULES]
-1. STYLE: Vintage scientific illustration meets modern line art. (Think: 19th-century encyclopedic etchings but cleaner).
-2. REALISM: Use realistic proportions and anatomy. Do NOT use 'chibi', 'cartoonish', or 'caricature' distortion.
-3. LINE WORK: Digital ink style. Crisp, sharp black strokes (#000000) on pure white (#FFFFFF). 
-   - No gray, no shading gradients, no blurry sketches.
-   - Use lines to suggest shadow (hatching), not gray colors.
-4. CREATIVITY: Even if the subject is fantasy, render it with PHENOMENAL REALISM (e.g., if drawing a dragon, draw realistic scales and muscles).
-5. NO TEXT: Absolutely NO words, letters, signatures, or watermarks.
+// [핵심 2] 현실성 강화를 위한 공통 룰
+const REALISM_RULES = `
+[REALISM & QUALITY RULES]
+1. ANATOMY/PHYSICS: Use realistic proportions. No 'chibi' heads, no rubbery limbs. Gravity and perspective must be accurate.
+2. LINE WORK: Professional Ink Illustration. Crisp black lines (#000000). No gray, no pencil sketches.
+3. DEPTH: Use line density (hatching) to suggest depth, rather than leaving flat spaces.
+4. NO TEXT: Absolutely NO words, letters, or signatures.
 `;
 
-// [핵심 3] 도안 생성 프롬프트 (Coloring Mode)
-export const COLORING_PROMPT_TEMPLATE = (userInput: string, difficultyLevel: number) => {
-  const styleKeywords = getDifficultyKeywords(difficultyLevel);
+// [핵심 3] 스타일별 최적화 프롬프트 생성기
+export const COLORING_PROMPT_TEMPLATE = (userInput: string, difficultyLevel: number, style: ArtStyle) => {
+  const diffKeywords = getDifficultyKeywords(difficultyLevel);
   
-  // 역할 부여를 '동화 작가'에서 '파인 아트 일러스트레이터'로 격상
-  return `**Role**: You are a world-class Fine Art Illustrator specializing in pen-and-ink drawings.
-**Task**: Create a high-complexity black and white coloring page.
+  // 스타일 선택에 따른 맞춤형 지시사항
+  let styleSpecificInstructions = "";
+  
+  if (style === ArtStyle.CHARACTER) {
+    styleSpecificInstructions = `
+    **FOCUS**: Character & Anatomy.
+    - Draw the subject with realistic anatomical structure (muscles, fur texture, fabric folds).
+    - Focus on facial expressions and dynamic poses.
+    - Background should be minimal or atmospheric to highlight the character.`;
+  } else {
+    styleSpecificInstructions = `
+    **FOCUS**: Scenery & Atmosphere.
+    - Draw a wide-angle scene with realistic perspective (vanishing points).
+    - Focus on textures of nature (leaves, bark, water ripples) or architecture (bricks, pillars).
+    - The composition should feel immersive and vast.`;
+  }
 
-**SUBJECT**: "${userInput}" 
-(Focus on capturing the essence of the subject with artistic depth.)
+  return `**Role**: You are a master illustrator specializing in realistic pen-and-ink drawings.
+**Task**: Create a high-quality black and white coloring page.
 
-**CONFIGURATION**:
-- Complexity Level: ${difficultyLevel}/5
-- Artistic Style: ${styleKeywords}
+**SUBJECT**: "${userInput}"
+**MODE**: ${style === ArtStyle.CHARACTER ? 'Character Portrait' : 'Landscape Scenery'}
+**DIFFICULTY**: ${difficultyLevel}/5 (${diffKeywords})
 
-${QUALITY_RULES}
+${styleSpecificInstructions}
 
-**COMPOSITION INSTRUCTIONS**:
-- Center the main subject but extend the artwork to the edges (unless Level 1).
-- For Level 3+, fill the negative space with thematic elements (leaves, clouds, geometric patterns) to increase complexity.
-- Ensure all lines are closed (no gaps) for easier coloring.
+${REALISM_RULES}
 
 **NEGATIVE PROMPT**:
-text, watermark, grayscale, blurry, sketch, pencil rubbings, low quality, jpeg artifacts, distorted face, extra fingers, cartoonish, simple, minimalism (unless Level 1).`;
+text, watermark, grayscale, blurry, distorted face, extra fingers, cartoonish proportions, anime style, simple doodle, low resolution.`;
 };
 
-// [핵심 3] 만다라 생성 프롬프트 (Mandala Mode)
+// 만다라 프롬프트 (기존 유지 + 퀄리티 강화)
 export const MANDALA_PROMPT_TEMPLATE = (userInput: string, difficultyLevel: number) => {
-  const styleKeywords = getDifficultyKeywords(difficultyLevel);
+  const diffKeywords = getDifficultyKeywords(difficultyLevel);
+  return `**Role**: Mandala Master Artist.
+**Task**: Create a symmetrical Mandala based on theme "${userInput}".
+**Difficulty**: ${difficultyLevel}/5 (${diffKeywords})
 
-  return `**Role**: You are a Master Sacred Geometry Artist.
-**Task**: Create a highly detailed Symmetrical Mandala Coloring Page.
-
-**THEME**: "${userInput}"
-(Weave the visual elements of '${userInput}' seamlessly into the geometric pattern. Do not just paste the image in the center; integrate it.)
-
-**CONFIGURATION**:
-- Complexity Level: ${difficultyLevel}/5
-- Pattern Style: ${styleKeywords}
-
-${QUALITY_RULES}
-
-**MANDALA SPECIFIC RULES**:
-- Perfect Radial Symmetry.
-- Line Consistency: Uniform line thickness appropriate for the difficulty level.
-- Edge-to-Edge: The pattern should extend to the boundaries of the image.
-
-**NEGATIVE PROMPT**:
-text, broken symmetry, uneven lines, shading, filled colors, simplistic, boring.`;
+[Rules]
+1. Radial Symmetry.
+2. Incorporate realistic elements of '${userInput}' into the pattern.
+3. Crisp, sharp vector-like lines. No gray.
+${REALISM_RULES}`;
 };
