@@ -21,20 +21,17 @@ const App: React.FC = () => {
   const [theme, setTheme] = useState<string>('');
   const [count, setCount] = useState<number>(DEFAULT_IMAGE_COUNT);
   const [difficulty, setDifficulty] = useState<number>(DEFAULT_DIFFICULTY);
-  // ⭐ 신규 상태: 스타일 모드 (기본값 'normal')
   const [styleMode, setStyleMode] = useState<'normal' | 'mandala'>('normal');
   
   const [images, setImages] = useState<ColoringPage[]>([]);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [progressStatus, setProgressStatus] = useState<string>('');
 
-  // Load API Key
   useEffect(() => {
     const storedKey = localStorage.getItem(LOCAL_STORAGE_KEY_API);
     if (storedKey) setApiKey(storedKey);
   }, []);
 
-  // Save API Key
   useEffect(() => {
     if (apiKey) localStorage.setItem(LOCAL_STORAGE_KEY_API, apiKey);
   }, [apiKey]);
@@ -46,10 +43,9 @@ const App: React.FC = () => {
     id: string, 
     currentTheme: string, 
     difficultyLevel: number,
-    mode: 'normal' | 'mandala' // ⭐ 모드 인자 추가
+    mode: 'normal' | 'mandala'
   ) => {
     try {
-      // ⭐ generateImageWithGemini에 모드(mode) 전달
       const url = await generateImageWithGemini(apiKey, currentTheme, difficultyLevel, mode);
       
       setImages(prev => prev.map(img => 
@@ -64,13 +60,12 @@ const App: React.FC = () => {
     }
   };
 
-  // Handler: 전체 생성 버튼 클릭
+  // Handler: 전체 생성
   const handleGenerate = async () => {
     if (!theme) return alert("주제를 입력해주세요.");
 
     setIsGenerating(true);
     
-    // 빈 카드 생성
     const newImages: ColoringPage[] = Array.from({ length: count }).map(() => ({
       id: uuidv4(),
       url: null,
@@ -85,7 +80,6 @@ const App: React.FC = () => {
       const img = newImages[i];
       setProgressStatus(`도안 그리는 중... (${i + 1}/${count})`);
       
-      // ⭐ 스타일 모드(styleMode) 전달
       await generateSingleSlot(img.id, theme, difficulty, styleMode);
 
       if (i < newImages.length - 1) {
@@ -101,7 +95,7 @@ const App: React.FC = () => {
     setProgressStatus('');
   };
 
-  // Handler: 선택 재성성
+  // Handler: 선택 재생성
   const handleRegenerateSelected = async () => {
     const selectedIds = images.filter(img => img.isSelected).map(img => img.id);
     if (selectedIds.length === 0) return alert("다시 생성할 도안을 선택해주세요.");
@@ -113,7 +107,6 @@ const App: React.FC = () => {
 
     for (let i = 0; i < selectedIds.length; i++) {
       setProgressStatus(`재생성 중... (${i + 1}/${selectedIds.length})`);
-      // ⭐ 스타일 모드 전달
       await generateSingleSlot(selectedIds[i], theme, difficulty, styleMode);
       
       if (i < selectedIds.length - 1) {
@@ -125,6 +118,7 @@ const App: React.FC = () => {
     setProgressStatus('');
   };
 
+  // ⭐ Handler: PDF 다운로드 (중앙 정렬 수정됨)
   const handleDownloadPDF = () => {
     const selectedImages = images.filter(img => img.isSelected && img.url);
 
@@ -134,16 +128,31 @@ const App: React.FC = () => {
     }
 
     try {
-      const pdf = new jsPDF('p', 'mm', 'a4'); 
-      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pdf = new jsPDF('p', 'mm', 'a4'); // A4 용지 (210mm x 297mm)
       
-      const margin = 10;
+      const pageWidth = pdf.internal.pageSize.getWidth();   // 약 210
+      const pageHeight = pdf.internal.pageSize.getHeight(); // 약 297
+      
+      const margin = 10; // 좌우 여백 10mm
+      
+      // 이미지 너비 = 페이지 너비 - 양쪽 여백
       const imgWidth = pageWidth - (margin * 2);
-      const imgHeight = imgWidth;
+      // 이미지는 정사각형(1:1)이므로 높이도 너비와 같음
+      const imgHeight = imgWidth; 
+
+      // ⭐ 세로 중앙 정렬 공식
+      // (전체높이 - 이미지높이) / 2 = 시작 Y 좌표
+      const yPosition = (pageHeight - imgHeight) / 2;
 
       selectedImages.forEach((img, index) => {
         if (index > 0) pdf.addPage();
-        pdf.addImage(img.url!, 'PNG', margin, margin, imgWidth, imgHeight);
+        
+        // x는 margin, y는 계산된 중앙값
+        pdf.addImage(img.url!, 'PNG', margin, yPosition, imgWidth, imgHeight);
+        
+        // (선택사항) 페이지 하단에 주제나 날짜를 적고 싶다면?
+        // pdf.setFontSize(10);
+        // pdf.text(`${theme} - AI Coloring Book`, pageWidth / 2, pageHeight - 10, { align: 'center' });
       });
       
       pdf.save(`${theme || "색칠공부"}_도안.pdf`);
@@ -177,7 +186,6 @@ const App: React.FC = () => {
         theme={theme} setTheme={setTheme}
         count={count} setCount={setCount}
         difficulty={difficulty} setDifficulty={setDifficulty}
-        // ⭐ Props 전달
         styleMode={styleMode} setStyleMode={setStyleMode}
         onGenerate={handleGenerate}
         isGenerating={isGenerating}
