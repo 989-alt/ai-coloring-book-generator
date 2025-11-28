@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { CheckCircle2, AlertCircle, RefreshCw, Download } from 'lucide-react';
 import { ColoringPage } from '../types';
@@ -24,6 +23,8 @@ export const ImageCard: React.FC<ImageCardProps> = ({ page, onToggleSelect, onRe
 
   return (
     <div className="flex flex-col gap-2">
+      {/* Hidden Items Hint 섹션 삭제됨 */}
+
       <div 
         className={`relative group rounded-xl overflow-hidden border-2 transition-all duration-200 bg-white shadow-sm aspect-[3/4] ${
           page.isSelected 
