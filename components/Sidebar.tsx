@@ -1,220 +1,189 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { v4 as uuidv4 } from 'uuid';
-import { Download, RefreshCw, Trash2 } from 'lucide-react';
-
-import { Sidebar } from './components/Sidebar';
-import { ImageCard } from './components/ImageCard';
-import { Button } from './components/Button';
-import { ColoringPage } from './types';
-import { generateImageWithGemini } from './services/geminiService';
-import { generatePDF } from './utils/pdfGenerator';
+import React from 'react';
+import { Settings, Key, Palette, Hash, Sliders, Brush, Circle, User, Mountain } from 'lucide-react';
+import { Button } from './Button';
 import { 
-  DEFAULT_IMAGE_COUNT, 
-  LOCAL_STORAGE_KEY_API, 
-  DEFAULT_DIFFICULTY,
-  AppMode,
-  ArtStyle, // ArtStyle 추가
-  COLORING_PROMPT_TEMPLATE,
-  MANDALA_PROMPT_TEMPLATE
-} from './constants';
+  MIN_IMAGE_COUNT, MAX_IMAGE_COUNT, 
+  MIN_DIFFICULTY, MAX_DIFFICULTY, 
+  AppMode, ArtStyle 
+} from '../constants';
 
-const App: React.FC = () => {
-  // State
-  const [apiKey, setApiKey] = useState<string>('');
-  const [theme, setTheme] = useState<string>('');
-  const [count, setCount] = useState<number>(DEFAULT_IMAGE_COUNT);
-  const [difficulty, setDifficulty] = useState<number>(DEFAULT_DIFFICULTY);
-  const [appMode, setAppMode] = useState<AppMode>(AppMode.COLORING);
-  const [artStyle, setArtStyle] = useState<ArtStyle>(ArtStyle.CHARACTER); // [신규] 스타일 상태 추가
+interface SidebarProps {
+  apiKey: string; setApiKey: (key: string) => void;
+  theme: string; setTheme: (theme: string) => void;
+  count: number; setCount: (count: number) => void;
+  difficulty: number; setDifficulty: (level: number) => void;
+  appMode: AppMode; setAppMode: (mode: AppMode) => void;
+  artStyle: ArtStyle; setArtStyle: (style: ArtStyle) => void;
+  onGenerate: () => void;
+  isGenerating: boolean;
+  progressStatus?: string;
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({
+  apiKey, setApiKey,
+  theme, setTheme,
+  count, setCount,
+  difficulty, setDifficulty,
+  appMode, setAppMode,
+  artStyle, setArtStyle,
+  onGenerate, isGenerating, progressStatus
+}) => {
   
-  const [images, setImages] = useState<ColoringPage[]>([]);
-  const [isGenerating, setIsGenerating] = useState<boolean>(false);
-  const [progressStatus, setProgressStatus] = useState<string>('');
-
-  // Load API Key
-  useEffect(() => {
-    const storedKey = localStorage.getItem(LOCAL_STORAGE_KEY_API);
-    if (storedKey) setApiKey(storedKey);
-  }, []);
-
-  // Save API Key
-  useEffect(() => {
-    if (apiKey) localStorage.setItem(LOCAL_STORAGE_KEY_API, apiKey);
-  }, [apiKey]);
-
-  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-  // Helper: Generate Single Slot
-  const generateSingleSlot = async (
-    id: string, 
-    currentTheme: string, 
-    difficultyLevel: number,
-    mode: AppMode,
-    style: ArtStyle // [신규] 스타일 인자 추가
-  ) => {
-    try {
-      let prompt = "";
-
-      if (mode === AppMode.COLORING) {
-        // [변경] 스타일 정보도 함께 전달
-        prompt = COLORING_PROMPT_TEMPLATE(currentTheme, difficultyLevel, style);
-      } else if (mode === AppMode.MANDALA) {
-        prompt = MANDALA_PROMPT_TEMPLATE(currentTheme, difficultyLevel);
-      }
-
-      const url = await generateImageWithGemini(apiKey, prompt);
-      
-      setImages(prev => prev.map(img => 
-        img.id === id ? { ...img, isLoading: false, url, error: null } : img
-      ));
-      return true;
-    } catch (error: any) {
-      setImages(prev => prev.map(img => 
-        img.id === id ? { ...img, isLoading: false, error: "생성 실패", url: null } : img
-      ));
-      return false;
+  const getDifficultyLabel = (level: number) => {
+    switch (level) {
+      case 1: return "1단계 (유아용)";
+      case 2: return "2단계 (쉬움)";
+      case 3: return "3단계 (보통 - 사실적)";
+      case 4: return "4단계 (디테일)";
+      case 5: return "5단계 (전문가)";
+      default: return `${level}단계`;
     }
   };
-
-  // Handler: Generate Loop
-  const handleGenerate = async () => {
-    if (!apiKey) return alert("API 키를 입력해주세요.");
-    if (!theme) return alert("주제를 입력해주세요.");
-
-    setIsGenerating(true);
-    
-    const newImages: ColoringPage[] = Array.from({ length: count }).map(() => ({
-      id: uuidv4(),
-      url: null,
-      isLoading: true,
-      error: null,
-      isSelected: false 
-    }));
-
-    setImages(newImages);
-
-    for (let i = 0; i < newImages.length; i++) {
-      const img = newImages[i];
-      
-      setProgressStatus(`도안 생성 중 (${i + 1}/${count})`);
-      
-      // [변경] artStyle 상태 전달
-      await generateSingleSlot(img.id, theme, difficulty, appMode, artStyle);
-
-      if (i < newImages.length - 1) {
-        await delay(1500);
-      }
-    }
-    
-    setIsGenerating(false);
-    setProgressStatus('');
-  };
-
-  // Handler: Regenerate Selected
-  const handleRegenerateSelected = async () => {
-    const selectedIds = images.filter(img => img.isSelected).map(img => img.id);
-    if (selectedIds.length === 0) return alert("다시 생성할 도안을 선택해주세요.");
-
-    setIsGenerating(true);
-    setImages(prev => prev.map(img => 
-      img.isSelected ? { ...img, isLoading: true, error: null, url: null } : img
-    ));
-
-    for (let i = 0; i < selectedIds.length; i++) {
-      setProgressStatus(`재생성 중 (${i + 1}/${selectedIds.length})`);
-      // [변경] artStyle 상태 전달
-      await generateSingleSlot(selectedIds[i], theme, difficulty, appMode, artStyle);
-      if (i < selectedIds.length - 1) await delay(1500);
-    }
-
-    setIsGenerating(false);
-    setProgressStatus('');
-  };
-
-  const handleDownloadPDF = () => {
-    const selectedImages = images.filter(img => img.isSelected && img.url).map(img => img.url!);
-    if (selectedImages.length === 0) return alert("PDF로 저장할 도안을 선택해주세요.");
-    generatePDF(selectedImages, theme || "ColoringBook");
-  };
-
-  const toggleSelect = useCallback((id: string) => {
-    setImages(prev => prev.map(img => 
-      img.id === id ? { ...img, isSelected: !img.isSelected } : img
-    ));
-  }, []);
-
-  const retrySingle = (id: string) => {
-    setImages(prev => prev.map(img => 
-        img.id === id ? { ...img, isLoading: true, error: null } : img
-    ));
-    generateSingleSlot(id, theme, difficulty, appMode, artStyle);
-  };
-
-  const hasImages = images.length > 0;
-  const selectedCount = images.filter(i => i.isSelected).length;
 
   return (
-    <div className="flex flex-col lg:flex-row min-h-screen bg-slate-50">
-      <Sidebar 
-        apiKey={apiKey} setApiKey={setApiKey}
-        theme={theme} setTheme={setTheme}
-        count={count} setCount={setCount}
-        difficulty={difficulty} setDifficulty={setDifficulty}
-        appMode={appMode} setAppMode={setAppMode}
-        artStyle={artStyle} setArtStyle={setArtStyle} // [신규] 전달
-        onGenerate={handleGenerate}
-        isGenerating={isGenerating}
-        progressStatus={progressStatus}
-      />
-
-      <main className="flex-1 p-6 lg:p-10 overflow-y-auto h-auto lg:h-screen">
-        {hasImages && (
-          <div className="mb-8 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200 sticky top-0 z-20">
-            <div className="text-slate-600 font-medium">
-              <span className="text-indigo-600 font-bold">{selectedCount}</span>장 선택됨
-            </div>
-            <div className="flex gap-2 w-full sm:w-auto">
-              <Button 
-                variant="secondary" onClick={handleRegenerateSelected}
-                disabled={selectedCount === 0 || isGenerating}
-                icon={<RefreshCw className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} />}
-                className="flex-1 sm:flex-none"
-              >
-                선택 다시 만들기
-              </Button>
-              <Button 
-                variant="primary" onClick={handleDownloadPDF}
-                disabled={selectedCount === 0 || isGenerating}
-                icon={<Download className="w-4 h-4" />}
-                className="flex-1 sm:flex-none"
-              >
-                PDF 저장
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {!hasImages && !isGenerating && (
-          <div className="h-[60vh] flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl">
-            <div className="bg-white p-6 rounded-full shadow-sm mb-4">
-              <Trash2 className="w-12 h-12 text-slate-300" />
-            </div>
-            <h2 className="text-xl font-semibold text-slate-600 mb-2">생성된 도안이 없습니다</h2>
-            <p>왼쪽 메뉴에서 주제를 입력하고 도안을 생성해보세요.</p>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6 pb-20">
-          {images.map((page) => (
-            <ImageCard 
-              key={page.id} page={page} 
-              onToggleSelect={toggleSelect} onRetry={retrySingle}
-            />
-          ))}
+    <aside className="w-full lg:w-80 bg-white border-b lg:border-b-0 lg:border-r border-slate-200 flex-shrink-0 lg:h-screen lg:sticky lg:top-0 overflow-y-auto z-10">
+      <div className="p-6 space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+            <span className="bg-indigo-600 text-white p-1 rounded-md">AI</span>
+            도안 생성기
+          </h1>
+          <p className="text-slate-500 text-sm mt-1">사실적인 고퀄리티 색칠공부</p>
         </div>
-      </main>
-    </div>
+
+        {/* 모드 선택 */}
+        <div className="flex p-1 bg-slate-100 rounded-lg">
+          <button
+            onClick={() => setAppMode(AppMode.COLORING)}
+            className={`flex-1 flex items-center justify-center py-2 text-sm font-medium rounded-md transition-all ${
+              appMode === AppMode.COLORING ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <Brush className="w-4 h-4 mr-2" />
+            일반 도안
+          </button>
+          <button
+            onClick={() => setAppMode(AppMode.MANDALA)}
+            className={`flex-1 flex items-center justify-center py-2 text-sm font-medium rounded-md transition-all ${
+              appMode === AppMode.MANDALA ? 'bg-white text-pink-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <Circle className="w-4 h-4 mr-2" />
+            만다라
+          </button>
+        </div>
+
+        <div className="space-y-6">
+          <div className="space-y-2">
+            <label className="flex items-center text-sm font-semibold text-slate-700">
+              <Key className="w-4 h-4 mr-2" />
+              구글 API 키
+            </label>
+            <input
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="API 키 입력"
+              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 text-sm"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="flex items-center text-sm font-semibold text-slate-700">
+              <Palette className="w-4 h-4 mr-2" />
+              주제 입력
+            </label>
+            <input
+              type="text"
+              value={theme}
+              onChange={(e) => setTheme(e.target.value)}
+              placeholder="예: 숲속의 사슴, 오래된 성"
+              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+
+          {/* 그림체 스타일 선택 (일반 도안 모드일 때만 표시) */}
+          {appMode === AppMode.COLORING && (
+            <div className="space-y-2">
+              <label className="flex items-center text-sm font-semibold text-slate-700">
+                <Settings className="w-4 h-4 mr-2" />
+                그림체 스타일
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setArtStyle(ArtStyle.CHARACTER)}
+                  className={`flex flex-col items-center justify-center p-3 border rounded-lg transition-all ${
+                    artStyle === ArtStyle.CHARACTER 
+                      ? 'border-indigo-600 bg-indigo-50 text-indigo-700' 
+                      : 'border-slate-200 hover:border-slate-300 text-slate-600'
+                  }`}
+                >
+                  <User className="w-5 h-5 mb-1" />
+                  <span className="text-xs font-medium">인물/캐릭터</span>
+                </button>
+                <button
+                  onClick={() => setArtStyle(ArtStyle.LANDSCAPE)}
+                  className={`flex flex-col items-center justify-center p-3 border rounded-lg transition-all ${
+                    artStyle === ArtStyle.LANDSCAPE 
+                      ? 'border-indigo-600 bg-indigo-50 text-indigo-700' 
+                      : 'border-slate-200 hover:border-slate-300 text-slate-600'
+                  }`}
+                >
+                  <Mountain className="w-5 h-5 mb-1" />
+                  <span className="text-xs font-medium">풍경/배경</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="flex items-center text-sm font-semibold text-slate-700">
+                <Sliders className="w-4 h-4 mr-2" />
+                난이도: {difficulty}
+              </label>
+              <span className="text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
+                {getDifficultyLabel(difficulty)}
+              </span>
+            </div>
+            <input
+              type="range"
+              min={MIN_DIFFICULTY} max={MAX_DIFFICULTY}
+              step={1}
+              value={difficulty}
+              onChange={(e) => setDifficulty(parseInt(e.target.value))}
+              className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="flex items-center text-sm font-semibold text-slate-700">
+              <Hash className="w-4 h-4 mr-2" />
+              생성할 장수
+            </label>
+            <input
+              type="number"
+              min={MIN_IMAGE_COUNT} max={MAX_IMAGE_COUNT}
+              value={count}
+              onChange={(e) => setCount(Math.min(MAX_IMAGE_COUNT, Math.max(MIN_IMAGE_COUNT, parseInt(e.target.value) || MIN_IMAGE_COUNT)))}
+              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+
+          <Button 
+            onClick={onGenerate} 
+            isLoading={isGenerating} 
+            disabled={!apiKey || !theme}
+            className="w-full h-12 text-lg flex-col leading-tight"
+          >
+            {isGenerating ? (
+              <span className="text-sm">{progressStatus || '생성 중...'}</span>
+            ) : (
+              '도안 생성하기'
+            )}
+          </Button>
+        </div>
+      </div>
+    </aside>
   );
 };
-
-export default App;
