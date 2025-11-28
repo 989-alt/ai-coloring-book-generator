@@ -6,7 +6,7 @@ import { Sidebar } from './components/Sidebar';
 import { ImageCard } from './components/ImageCard';
 import { Button } from './components/Button';
 import { ColoringPage } from './types';
-import { generateImageWithGemini, analyzeImageForPrompt } from './services/geminiService'; // 분석 함수 import
+import { generateImageWithGemini, analyzeImageForPrompt } from './services/geminiService';
 import { generatePDF } from './utils/pdfGenerator';
 import { 
   DEFAULT_IMAGE_COUNT, 
@@ -25,7 +25,7 @@ const App: React.FC = () => {
   const [difficulty, setDifficulty] = useState<number>(DEFAULT_DIFFICULTY);
   const [appMode, setAppMode] = useState<AppMode>(AppMode.COLORING);
   const [artStyle, setArtStyle] = useState<ArtStyle>(ArtStyle.CHARACTER);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null); // [신규] 파일 상태
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   
   const [images, setImages] = useState<ColoringPage[]>([]);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
@@ -42,20 +42,18 @@ const App: React.FC = () => {
 
   const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-  // [신규] 생성 로직 (이미지 분석 포함)
   const generateSingleSlot = async (
     id: string, 
     currentTheme: string, 
     difficultyLevel: number,
     mode: AppMode,
     style: ArtStyle,
-    imageDesc?: string // [신규] 이미지 설명
+    imageDesc?: string
   ) => {
     try {
       let prompt = "";
 
       if (mode === AppMode.COLORING) {
-        // [중요] 이미지 설명이 있으면 같이 전달
         prompt = COLORING_PROMPT_TEMPLATE(currentTheme, difficultyLevel, style, imageDesc);
       } else if (mode === AppMode.MANDALA) {
         prompt = MANDALA_PROMPT_TEMPLATE(currentTheme, difficultyLevel);
@@ -81,20 +79,21 @@ const App: React.FC = () => {
 
     setIsGenerating(true);
     
-    // 1. 이미지 분석 단계 (파일이 있을 경우)
+    // 1. 이미지 분석 단계
     let analyzedDescription = "";
     if (selectedFile) {
       try {
-        setProgressStatus("AI가 참고 이미지를 분석하는 중...");
+        setProgressStatus("AI가 이미지를 분석 중...");
         analyzedDescription = await analyzeImageForPrompt(apiKey, selectedFile);
-        console.log("Image Analyzed:", analyzedDescription);
+        
+        if (!analyzedDescription) {
+             console.warn("이미지 분석 결과가 비어있습니다.");
+        }
       } catch (e) {
-        alert("이미지 분석 실패. 텍스트로만 생성합니다.");
-        console.error(e);
+        console.error("이미지 분석 건너뜀:", e);
       }
     }
 
-    // 2. 이미지 생성 준비
     const newImages: ColoringPage[] = Array.from({ length: count }).map(() => ({
       id: uuidv4(),
       url: null,
@@ -104,12 +103,10 @@ const App: React.FC = () => {
     }));
     setImages(newImages);
 
-    // 3. 순차 생성
     for (let i = 0; i < newImages.length; i++) {
       const img = newImages[i];
       setProgressStatus(`도안 생성 중 (${i + 1}/${count})`);
       
-      // 분석된 설명(analyzedDescription) 전달
       await generateSingleSlot(img.id, theme, difficulty, appMode, artStyle, analyzedDescription);
 
       if (i < newImages.length - 1) {
@@ -121,8 +118,6 @@ const App: React.FC = () => {
     setProgressStatus('');
   };
 
-  // 재생성 핸들러 (이미지 설명은 저장하지 않으므로, 재생성 시에는 텍스트 기반으로 작동하거나 구조 개선 필요)
-  // 편의상 여기서는 단순 재생성만 처리
   const handleRegenerateSelected = async () => {
     const selectedIds = images.filter(img => img.isSelected).map(img => img.id);
     if (selectedIds.length === 0) return alert("다시 생성할 도안을 선택해주세요.");
@@ -134,8 +129,6 @@ const App: React.FC = () => {
 
     for (let i = 0; i < selectedIds.length; i++) {
       setProgressStatus(`재생성 중 (${i + 1}/${selectedIds.length})`);
-      // 재생성 시에는 원본 이미지를 다시 분석하지 않고 텍스트 테마만 사용 (비용 절감)
-      // 필요시 상태에 description을 저장해야 함.
       await generateSingleSlot(selectedIds[i], theme, difficulty, appMode, artStyle);
       if (i < selectedIds.length - 1) await delay(1500);
     }
@@ -175,7 +168,7 @@ const App: React.FC = () => {
         difficulty={difficulty} setDifficulty={setDifficulty}
         appMode={appMode} setAppMode={setAppMode}
         artStyle={artStyle} setArtStyle={setArtStyle}
-        selectedFile={selectedFile} setSelectedFile={setSelectedFile} // [신규]
+        selectedFile={selectedFile} setSelectedFile={setSelectedFile}
         onGenerate={handleGenerate}
         isGenerating={isGenerating}
         progressStatus={progressStatus}
