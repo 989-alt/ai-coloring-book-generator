@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Download, RefreshCw, Trash2, Brush } from 'lucide-react';
-import { jsPDF } from "jspdf"; // PDF 라이브러리 (npm install jspdf 필요)
+import { jsPDF } from "jspdf"; 
 
 import { Sidebar } from './components/Sidebar';
 import { ImageCard } from './components/ImageCard';
@@ -12,8 +12,7 @@ import { generateImageWithGemini } from './services/geminiService';
 import { 
   DEFAULT_IMAGE_COUNT, 
   LOCAL_STORAGE_KEY_API, 
-  DEFAULT_DIFFICULTY,
-  COLORING_PROMPT_TEMPLATE
+  DEFAULT_DIFFICULTY
 } from './constants';
 
 const App: React.FC = () => {
@@ -22,6 +21,8 @@ const App: React.FC = () => {
   const [theme, setTheme] = useState<string>('');
   const [count, setCount] = useState<number>(DEFAULT_IMAGE_COUNT);
   const [difficulty, setDifficulty] = useState<number>(DEFAULT_DIFFICULTY);
+  // ⭐ 신규 상태: 스타일 모드 (기본값 'normal')
+  const [styleMode, setStyleMode] = useState<'normal' | 'mandala'>('normal');
   
   const [images, setImages] = useState<ColoringPage[]>([]);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
@@ -44,11 +45,12 @@ const App: React.FC = () => {
   const generateSingleSlot = async (
     id: string, 
     currentTheme: string, 
-    difficultyLevel: number
+    difficultyLevel: number,
+    mode: 'normal' | 'mandala' // ⭐ 모드 인자 추가
   ) => {
     try {
-      // ⭐ [수정됨] 난이도(difficultyLevel)를 3번째 인자로 전달합니다!
-      const url = await generateImageWithGemini(apiKey, currentTheme, difficultyLevel);
+      // ⭐ generateImageWithGemini에 모드(mode) 전달
+      const url = await generateImageWithGemini(apiKey, currentTheme, difficultyLevel, mode);
       
       setImages(prev => prev.map(img => 
         img.id === id ? { ...img, isLoading: false, url, error: null } : img
@@ -64,13 +66,11 @@ const App: React.FC = () => {
 
   // Handler: 전체 생성 버튼 클릭
   const handleGenerate = async () => {
-    // API 키가 없어도 Pollinations는 작동하므로 경고를 뺍니다(선택사항). 
-    // 하지만 번역 품질을 위해 입력을 권장합니다.
     if (!theme) return alert("주제를 입력해주세요.");
 
     setIsGenerating(true);
     
-    // 빈 카드 먼저 생성
+    // 빈 카드 생성
     const newImages: ColoringPage[] = Array.from({ length: count }).map(() => ({
       id: uuidv4(),
       url: null,
@@ -81,15 +81,13 @@ const App: React.FC = () => {
 
     setImages(newImages);
 
-    // 순차적으로 생성 요청
     for (let i = 0; i < newImages.length; i++) {
       const img = newImages[i];
       setProgressStatus(`도안 그리는 중... (${i + 1}/${count})`);
       
-      // ⭐ 난이도(difficulty) 전달
-      await generateSingleSlot(img.id, theme, difficulty);
+      // ⭐ 스타일 모드(styleMode) 전달
+      await generateSingleSlot(img.id, theme, difficulty, styleMode);
 
-      // 서버 과부하 방지를 위한 짧은 대기 (5초)
       if (i < newImages.length - 1) {
         const waitTime = 5; 
         for (let t = waitTime; t > 0; t--) {
@@ -103,7 +101,7 @@ const App: React.FC = () => {
     setProgressStatus('');
   };
 
-  // Handler: 선택한 것만 재생성
+  // Handler: 선택 재성성
   const handleRegenerateSelected = async () => {
     const selectedIds = images.filter(img => img.isSelected).map(img => img.id);
     if (selectedIds.length === 0) return alert("다시 생성할 도안을 선택해주세요.");
@@ -115,7 +113,8 @@ const App: React.FC = () => {
 
     for (let i = 0; i < selectedIds.length; i++) {
       setProgressStatus(`재생성 중... (${i + 1}/${selectedIds.length})`);
-      await generateSingleSlot(selectedIds[i], theme, difficulty);
+      // ⭐ 스타일 모드 전달
+      await generateSingleSlot(selectedIds[i], theme, difficulty, styleMode);
       
       if (i < selectedIds.length - 1) {
         await delay(3000);
@@ -126,7 +125,6 @@ const App: React.FC = () => {
     setProgressStatus('');
   };
 
-  // Handler: PDF 다운로드 (jspdf 사용)
   const handleDownloadPDF = () => {
     const selectedImages = images.filter(img => img.isSelected && img.url);
 
@@ -141,7 +139,7 @@ const App: React.FC = () => {
       
       const margin = 10;
       const imgWidth = pageWidth - (margin * 2);
-      const imgHeight = imgWidth; // 정사각형
+      const imgHeight = imgWidth;
 
       selectedImages.forEach((img, index) => {
         if (index > 0) pdf.addPage();
@@ -166,7 +164,7 @@ const App: React.FC = () => {
     setImages(prev => prev.map(img => 
         img.id === id ? { ...img, isLoading: true, error: null } : img
     ));
-    generateSingleSlot(id, theme, difficulty);
+    generateSingleSlot(id, theme, difficulty, styleMode);
   };
 
   const hasImages = images.length > 0;
@@ -179,6 +177,8 @@ const App: React.FC = () => {
         theme={theme} setTheme={setTheme}
         count={count} setCount={setCount}
         difficulty={difficulty} setDifficulty={setDifficulty}
+        // ⭐ Props 전달
+        styleMode={styleMode} setStyleMode={setStyleMode}
         onGenerate={handleGenerate}
         isGenerating={isGenerating}
         progressStatus={progressStatus}
