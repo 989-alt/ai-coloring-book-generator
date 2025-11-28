@@ -13,7 +13,7 @@ import {
   LOCAL_STORAGE_KEY_API, 
   DEFAULT_DIFFICULTY,
   AppMode,
-  ArtStyle, // ArtStyle 추가
+  ArtStyle, // 이 부분이 중요합니다
   COLORING_PROMPT_TEMPLATE,
   MANDALA_PROMPT_TEMPLATE
 } from './constants';
@@ -25,7 +25,7 @@ const App: React.FC = () => {
   const [count, setCount] = useState<number>(DEFAULT_IMAGE_COUNT);
   const [difficulty, setDifficulty] = useState<number>(DEFAULT_DIFFICULTY);
   const [appMode, setAppMode] = useState<AppMode>(AppMode.COLORING);
-  const [artStyle, setArtStyle] = useState<ArtStyle>(ArtStyle.CHARACTER); // [신규] 스타일 상태 추가
+  const [artStyle, setArtStyle] = useState<ArtStyle>(ArtStyle.CHARACTER); // 상태 추가
   
   const [images, setImages] = useState<ColoringPage[]>([]);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
@@ -50,13 +50,12 @@ const App: React.FC = () => {
     currentTheme: string, 
     difficultyLevel: number,
     mode: AppMode,
-    style: ArtStyle // [신규] 스타일 인자 추가
+    style: ArtStyle 
   ) => {
     try {
       let prompt = "";
 
       if (mode === AppMode.COLORING) {
-        // [변경] 스타일 정보도 함께 전달
         prompt = COLORING_PROMPT_TEMPLATE(currentTheme, difficultyLevel, style);
       } else if (mode === AppMode.MANDALA) {
         prompt = MANDALA_PROMPT_TEMPLATE(currentTheme, difficultyLevel);
@@ -98,7 +97,6 @@ const App: React.FC = () => {
       
       setProgressStatus(`도안 생성 중 (${i + 1}/${count})`);
       
-      // [변경] artStyle 상태 전달
       await generateSingleSlot(img.id, theme, difficulty, appMode, artStyle);
 
       if (i < newImages.length - 1) {
@@ -122,7 +120,6 @@ const App: React.FC = () => {
 
     for (let i = 0; i < selectedIds.length; i++) {
       setProgressStatus(`재생성 중 (${i + 1}/${selectedIds.length})`);
-      // [변경] artStyle 상태 전달
       await generateSingleSlot(selectedIds[i], theme, difficulty, appMode, artStyle);
       if (i < selectedIds.length - 1) await delay(1500);
     }
@@ -161,7 +158,7 @@ const App: React.FC = () => {
         count={count} setCount={setCount}
         difficulty={difficulty} setDifficulty={setDifficulty}
         appMode={appMode} setAppMode={setAppMode}
-        artStyle={artStyle} setArtStyle={setArtStyle} // [신규] 전달
+        artStyle={artStyle} setArtStyle={setArtStyle} // 여기에 꼭 전달해야 함!
         onGenerate={handleGenerate}
         isGenerating={isGenerating}
         progressStatus={progressStatus}
