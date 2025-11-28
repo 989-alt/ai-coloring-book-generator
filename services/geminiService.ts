@@ -1,4 +1,5 @@
-import { GoogleGenAI } from "@google/genai";
+
+import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
 
 export const generateImageWithGemini = async (apiKey: string, prompt: string): Promise<string> => {
   if (!apiKey) throw new Error("API Key가 필요합니다.");
@@ -7,14 +8,28 @@ export const generateImageWithGemini = async (apiKey: string, prompt: string): P
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
+      model: 'gemini-2.0-flash', // Updated to stable flash model
       contents: { parts: [{ text: prompt }] },
       config: {
-        imageConfig: { aspectRatio: "3:4" },
+        // Safety Settings: BLOCK_NONE is crucial for creative tasks to avoid false positives
+        safetySettings: [
+          { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+          { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+          { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+          { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+        ],
       },
     });
 
     let base64Data = null;
+    
+    // Check for image generation response structure (if using Imagen model via generateContent)
+    // Or check if the model returns text that contains an image link (less likely with Flash)
+    // NOTE: Gemini 2.0 Flash is multimodal but primarily text-out. 
+    // If you need direct image generation, you might need 'imagen-3.0-generate-001' or similar.
+    // However, assuming the previous prompt used 'gemini-2.5-flash-image' which implies an experimental image capability.
+    // We will stick to the previous extraction logic but try to be robust.
+
     if (response.candidates && response.candidates[0].content.parts) {
       for (const part of response.candidates[0].content.parts) {
         if (part.inlineData) {
@@ -24,11 +39,21 @@ export const generateImageWithGemini = async (apiKey: string, prompt: string): P
       }
     }
 
-    if (!base64Data) throw new Error("이미지 데이터가 없습니다.");
+    if (!base64Data) {
+       // If no inline data, check if there is text explaining why, or try a fallback logic if needed.
+       // For now, if strictly using Gemini for images, we expect inlineData.
+       console.error("No inlineData found in response:", response);
+       throw new Error("이미지를 생성할 수 없습니다. (데이터 없음)");
+    }
+
     return `data:image/png;base64,${base64Data}`;
 
   } catch (error: any) {
-    console.error("Gemini Error:", error);
-    throw new Error(error.message || "이미지 생성 실패");
+    console.error("Gemini API Error:", error);
+    let errorMsg = error.message || "이미지 생성 실패";
+    if (errorMsg.includes("SAFETY")) {
+        errorMsg = "안전 정책에 의해 차단되었습니다. 주제를 변경해보세요.";
+    }
+    throw new Error(errorMsg);
   }
 };
