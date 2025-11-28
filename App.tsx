@@ -1,22 +1,21 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Download, RefreshCw, Trash2, Brush } from 'lucide-react';
+import { jsPDF } from "jspdf"; // 1. 위치 수정됨
 
 import { Sidebar } from './components/Sidebar';
 import { ImageCard } from './components/ImageCard';
 import { Button } from './components/Button';
 import { ColoringPage } from './types';
 import { generateImageWithGemini } from './services/geminiService';
-import { generatePDF } from './utils/pdfGenerator';
+// generatePDF import는 이제 필요 없어서 제거했습니다.
+
 import { 
   DEFAULT_IMAGE_COUNT, 
   LOCAL_STORAGE_KEY_API, 
   DEFAULT_DIFFICULTY,
   COLORING_PROMPT_TEMPLATE
-}
-import { jsPDF } from "jspdf";
-from './constants';
+} from './constants'; // 2. 문법 오류 수정됨
 
 const App: React.FC = () => {
   // State
@@ -49,8 +48,9 @@ const App: React.FC = () => {
     difficultyLevel: number
   ) => {
     try {
-      const prompt = COLORING_PROMPT_TEMPLATE(currentTheme, difficultyLevel);
-      const url = await generateImageWithGemini(apiKey, prompt);
+      // 3. 난이도 대신 스타일 키워드 강제 적용을 위해 프롬프트 전달 방식이 geminiService 내부에서 처리되도록 함
+      // (geminiService.ts가 이미 수정되었으므로 여기서는 주제만 넘겨도 됩니다)
+      const url = await generateImageWithGemini(apiKey, currentTheme);
       
       setImages(prev => prev.map(img => 
         img.id === id ? { ...img, isLoading: false, url, error: null } : img
@@ -87,9 +87,8 @@ const App: React.FC = () => {
       
       await generateSingleSlot(img.id, theme, difficulty);
 
-      // Add a long delay between requests to avoid 429 errors (Free Tier Image Generation Limit)
       if (i < newImages.length - 1) {
-        const waitTime = 20; // 20 seconds
+        const waitTime = 5; // Pollinations는 빠르므로 대기 시간을 5초로 줄였습니다.
         for (let t = waitTime; t > 0; t--) {
              setProgressStatus(`다음 장 준비 중... (${t}초 대기)`);
              await delay(1000);
@@ -116,11 +115,7 @@ const App: React.FC = () => {
       await generateSingleSlot(selectedIds[i], theme, difficulty);
       
       if (i < selectedIds.length - 1) {
-        const waitTime = 20;
-        for (let t = waitTime; t > 0; t--) {
-             setProgressStatus(`다음 장 준비 중... (${t}초 대기)`);
-             await delay(1000);
-        }
+        await delay(3000); // 3초 대기
       }
     }
 
@@ -128,11 +123,43 @@ const App: React.FC = () => {
     setProgressStatus('');
   };
 
+  // --- [PDF 저장 함수 수정 완료] ---
   const handleDownloadPDF = () => {
-    const selectedImages = images.filter(img => img.isSelected && img.url).map(img => img.url!);
-    if (selectedImages.length === 0) return alert("PDF로 저장할 도안을 선택해주세요.");
-    generatePDF(selectedImages, theme || "ColoringBook");
+    // 1. 선택된 이미지들만 골라냅니다.
+    const selectedImages = images.filter(img => img.isSelected && img.url);
+
+    if (selectedImages.length === 0) {
+      alert("PDF로 저장할 도안을 선택해주세요!");
+      return;
+    }
+
+    try {
+      const pdf = new jsPDF('p', 'mm', 'a4'); // A4 용지 생성
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      
+      const margin = 10;
+      const imgWidth = pageWidth - (margin * 2);
+      const imgHeight = imgWidth; // 정사각형 이미지
+
+      // 선택된 이미지들을 순서대로 PDF에 추가합니다.
+      selectedImages.forEach((img, index) => {
+        if (index > 0) {
+            pdf.addPage(); // 두 번째 장부터는 새 페이지 추가
+        }
+        // img.url! 은 위에서 filter로 검사했으므로 존재함
+        pdf.addImage(img.url!, 'PNG', margin, margin, imgWidth, imgHeight);
+      });
+      
+      // 파일 저장
+      pdf.save(`${theme || "색칠공부"}_도안.pdf`);
+
+    } catch (error) {
+      console.error("PDF 저장 에러:", error);
+      alert("PDF 저장 중 문제가 발생했습니다. (이미지 로딩 문제일 수 있습니다)");
+    }
   };
+  // --- [PDF 저장 함수 끝] ---
 
   const toggleSelect = useCallback((id: string) => {
     setImages(prev => prev.map(img => 
@@ -149,38 +176,7 @@ const App: React.FC = () => {
 
   const hasImages = images.length > 0;
   const selectedCount = images.filter(i => i.isSelected).length;
-// --- [PDF 저장 함수 시작] ---
-  const handleDownloadPDF = () => {
-    // 1. 현재 화면에 보이는 이미지가 있는지 확인
-    // (주의: 'images' 라는 변수명이 다르면 'generatedImages' 등으로 바꿔주세요!)
-    const currentImage = images[selectedImageIndex]; 
 
-    if (!currentImage) {
-      alert("먼저 도안을 생성하고 선택해주세요!");
-      return;
-    }
-
-    try {
-      const pdf = new jsPDF('p', 'mm', 'a4'); // A4 용지 생성
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      
-      // 여백 10mm
-      const margin = 10;
-      const imgWidth = pageWidth - (margin * 2);
-      const imgHeight = imgWidth; // 정사각형 이미지
-
-      // 이미지 추가
-      pdf.addImage(currentImage, 'PNG', margin, margin, imgWidth, imgHeight);
-      
-      // 파일 저장
-      pdf.save("나만의_색칠공부.pdf");
-
-    } catch (error) {
-      console.error("PDF 저장 에러:", error);
-      alert("PDF 저장 중 문제가 발생했습니다.");
-    }
-  };
-  // --- [PDF 저장 함수 끝] ---
   return (
     <div className="flex flex-col lg:flex-row min-h-screen bg-slate-50">
       <Sidebar 
