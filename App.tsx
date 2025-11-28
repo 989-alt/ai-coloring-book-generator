@@ -1,18 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Download, RefreshCw, Trash2, Brush } from 'lucide-react';
-import { jsPDF } from "jspdf"; 
+import { Download, RefreshCw, Trash2 } from 'lucide-react';
 
 import { Sidebar } from './components/Sidebar';
 import { ImageCard } from './components/ImageCard';
 import { Button } from './components/Button';
 import { ColoringPage } from './types';
 import { generateImageWithGemini } from './services/geminiService';
-
+import { generatePDF } from './utils/pdfGenerator';
 import { 
   DEFAULT_IMAGE_COUNT, 
   LOCAL_STORAGE_KEY_API, 
-  DEFAULT_DIFFICULTY
+  DEFAULT_DIFFICULTY,
+  AppMode,
+  COLORING_PROMPT_TEMPLATE,
+  MANDALA_PROMPT_TEMPLATE
 } from './constants';
 
 const App: React.FC = () => {
@@ -21,32 +23,44 @@ const App: React.FC = () => {
   const [theme, setTheme] = useState<string>('');
   const [count, setCount] = useState<number>(DEFAULT_IMAGE_COUNT);
   const [difficulty, setDifficulty] = useState<number>(DEFAULT_DIFFICULTY);
-  const [styleMode, setStyleMode] = useState<'normal' | 'mandala'>('normal');
+  const [appMode, setAppMode] = useState<AppMode>(AppMode.COLORING);
+  // hiddenCount 삭제됨
   
   const [images, setImages] = useState<ColoringPage[]>([]);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [progressStatus, setProgressStatus] = useState<string>('');
 
+  // Load API Key
   useEffect(() => {
     const storedKey = localStorage.getItem(LOCAL_STORAGE_KEY_API);
     if (storedKey) setApiKey(storedKey);
   }, []);
 
+  // Save API Key
   useEffect(() => {
     if (apiKey) localStorage.setItem(LOCAL_STORAGE_KEY_API, apiKey);
   }, [apiKey]);
 
   const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-  // Helper: 도안 1장 생성 함수
+  // Helper: Generate Single Slot
   const generateSingleSlot = async (
     id: string, 
     currentTheme: string, 
     difficultyLevel: number,
-    mode: 'normal' | 'mandala'
+    mode: AppMode
   ) => {
     try {
-      const url = await generateImageWithGemini(apiKey, currentTheme, difficultyLevel, mode);
+      let prompt = "";
+
+      // 모드에 따라 프롬프트 분기 처리
+      if (mode === AppMode.COLORING) {
+        prompt = COLORING_PROMPT_TEMPLATE(currentTheme, difficultyLevel);
+      } else if (mode === AppMode.MANDALA) {
+        prompt = MANDALA_PROMPT_TEMPLATE(currentTheme, difficultyLevel);
+      }
+
+      const url = await generateImageWithGemini(apiKey, prompt);
       
       setImages(prev => prev.map(img => 
         img.id === id ? { ...img, isLoading: false, url, error: null } : img
@@ -54,17 +68,19 @@ const App: React.FC = () => {
       return true;
     } catch (error: any) {
       setImages(prev => prev.map(img => 
-        img.id === id ? { ...img, isLoading: false, error: error.message || "생성 실패", url: null } : img
+        img.id === id ? { ...img, isLoading: false, error: "생성 실패", url: null } : img
       ));
       return false;
     }
   };
 
-  // Handler: 전체 생성
+  // Handler: Generate Loop
   const handleGenerate = async () => {
+    if (!apiKey) return alert("API 키를 입력해주세요.");
     if (!theme) return alert("주제를 입력해주세요.");
 
     setIsGenerating(true);
+    setProgressStatus(`준비 중...`);
     
     const newImages: ColoringPage[] = Array.from({ length: count }).map(() => ({
       id: uuidv4(),
@@ -78,16 +94,14 @@ const App: React.FC = () => {
 
     for (let i = 0; i < newImages.length; i++) {
       const img = newImages[i];
-      setProgressStatus(`도안 그리는 중... (${i + 1}/${count})`);
       
-      await generateSingleSlot(img.id, theme, difficulty, styleMode);
+      const modeName = appMode === AppMode.MANDALA ? "만다라" : "도안";
+      setProgressStatus(`${modeName} 그리는 중... (${i + 1}/${count})`);
+      
+      await generateSingleSlot(img.id, theme, difficulty, appMode);
 
       if (i < newImages.length - 1) {
-        const waitTime = 5; 
-        for (let t = waitTime; t > 0; t--) {
-             setProgressStatus(`다음 장 준비 중... (${t}초 대기)`);
-             await delay(1000);
-        }
+        await delay(1500); // Quota 제한 방지
       }
     }
     
@@ -95,7 +109,7 @@ const App: React.FC = () => {
     setProgressStatus('');
   };
 
-  // Handler: 선택 재생성
+  // Handler: Regenerate Selected
   const handleRegenerateSelected = async () => {
     const selectedIds = images.filter(img => img.isSelected).map(img => img.id);
     if (selectedIds.length === 0) return alert("다시 생성할 도안을 선택해주세요.");
@@ -107,60 +121,18 @@ const App: React.FC = () => {
 
     for (let i = 0; i < selectedIds.length; i++) {
       setProgressStatus(`재생성 중... (${i + 1}/${selectedIds.length})`);
-      await generateSingleSlot(selectedIds[i], theme, difficulty, styleMode);
-      
-      if (i < selectedIds.length - 1) {
-        await delay(3000);
-      }
+      await generateSingleSlot(selectedIds[i], theme, difficulty, appMode);
+      if (i < selectedIds.length - 1) await delay(1500);
     }
 
     setIsGenerating(false);
     setProgressStatus('');
   };
 
-  // ⭐ Handler: PDF 다운로드 (중앙 정렬 수정됨)
   const handleDownloadPDF = () => {
-    const selectedImages = images.filter(img => img.isSelected && img.url);
-
-    if (selectedImages.length === 0) {
-      alert("PDF로 저장할 도안을 선택해주세요!");
-      return;
-    }
-
-    try {
-      const pdf = new jsPDF('p', 'mm', 'a4'); // A4 용지 (210mm x 297mm)
-      
-      const pageWidth = pdf.internal.pageSize.getWidth();   // 약 210
-      const pageHeight = pdf.internal.pageSize.getHeight(); // 약 297
-      
-      const margin = 10; // 좌우 여백 10mm
-      
-      // 이미지 너비 = 페이지 너비 - 양쪽 여백
-      const imgWidth = pageWidth - (margin * 2);
-      // 이미지는 정사각형(1:1)이므로 높이도 너비와 같음
-      const imgHeight = imgWidth; 
-
-      // ⭐ 세로 중앙 정렬 공식
-      // (전체높이 - 이미지높이) / 2 = 시작 Y 좌표
-      const yPosition = (pageHeight - imgHeight) / 2;
-
-      selectedImages.forEach((img, index) => {
-        if (index > 0) pdf.addPage();
-        
-        // x는 margin, y는 계산된 중앙값
-        pdf.addImage(img.url!, 'PNG', margin, yPosition, imgWidth, imgHeight);
-        
-        // (선택사항) 페이지 하단에 주제나 날짜를 적고 싶다면?
-        // pdf.setFontSize(10);
-        // pdf.text(`${theme} - AI Coloring Book`, pageWidth / 2, pageHeight - 10, { align: 'center' });
-      });
-      
-      pdf.save(`${theme || "색칠공부"}_도안.pdf`);
-
-    } catch (error) {
-      console.error("PDF 저장 에러:", error);
-      alert("PDF 저장 중 문제가 발생했습니다.");
-    }
+    const selectedImages = images.filter(img => img.isSelected && img.url).map(img => img.url!);
+    if (selectedImages.length === 0) return alert("PDF로 저장할 도안을 선택해주세요.");
+    generatePDF(selectedImages, theme || "ColoringBook");
   };
 
   const toggleSelect = useCallback((id: string) => {
@@ -173,7 +145,7 @@ const App: React.FC = () => {
     setImages(prev => prev.map(img => 
         img.id === id ? { ...img, isLoading: true, error: null } : img
     ));
-    generateSingleSlot(id, theme, difficulty, styleMode);
+    generateSingleSlot(id, theme, difficulty, appMode);
   };
 
   const hasImages = images.length > 0;
@@ -186,7 +158,7 @@ const App: React.FC = () => {
         theme={theme} setTheme={setTheme}
         count={count} setCount={setCount}
         difficulty={difficulty} setDifficulty={setDifficulty}
-        styleMode={styleMode} setStyleMode={setStyleMode}
+        appMode={appMode} setAppMode={setAppMode}
         onGenerate={handleGenerate}
         isGenerating={isGenerating}
         progressStatus={progressStatus}
@@ -222,9 +194,9 @@ const App: React.FC = () => {
         {!hasImages && !isGenerating && (
           <div className="h-[60vh] flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl">
             <div className="bg-white p-6 rounded-full shadow-sm mb-4">
-              <Brush className="w-12 h-12 text-slate-300" />
+              <Trash2 className="w-12 h-12 text-slate-300" />
             </div>
-            <h2 className="text-xl font-semibold text-slate-600 mb-2">도안이 없습니다</h2>
+            <h2 className="text-xl font-semibold text-slate-600 mb-2">생성된 도안이 없습니다</h2>
             <p>왼쪽 메뉴에서 주제를 입력하고 도안을 생성해보세요.</p>
           </div>
         )}
