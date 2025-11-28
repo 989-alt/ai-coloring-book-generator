@@ -6,6 +6,7 @@ export const DEFAULT_DIFFICULTY = 3;
 export const MIN_DIFFICULTY = 1;
 export const MAX_DIFFICULTY = 5;
 
+// [필수] 그림체 스타일 정의
 export enum ArtStyle {
   CHARACTER = 'character',
   LANDSCAPE = 'landscape'
@@ -37,18 +38,18 @@ const REALISM_RULES = `
 4. NO TEXT: Absolutely NO words, letters, or signatures.
 `;
 
-// [업데이트] 이미지 분석 결과가 있을 경우 합치는 함수
+// [수정] imageDescription 파라미터를 선택적으로 받도록 처리
 export const COLORING_PROMPT_TEMPLATE = (
   userInput: string, 
   difficultyLevel: number, 
   style: ArtStyle,
-  imageDescription?: string // 선택적 파라미터 추가
+  imageDescription?: string
 ) => {
   const diffKeywords = getDifficultyKeywords(difficultyLevel);
   
   // 이미지 분석 결과가 있으면 그것을 메인으로 삼음
   const mainSubject = imageDescription 
-    ? `Main Reference: ${imageDescription}\nUser Modification Request: "${userInput}"`
+    ? `Main Reference: ${imageDescription}\nUser Modification: "${userInput}"`
     : `"${userInput}"`;
 
   let styleSpecificInstructions = "";
@@ -63,7 +64,6 @@ export const COLORING_PROMPT_TEMPLATE = (
 
 **SUBJECT CONTEXT**: 
 ${mainSubject}
-(If a Main Reference is provided, reconstruct that scene closely but converted into clean line art. Apply User Modification if specified.)
 
 **CONFIGURATION**:
 - Mode: ${style === ArtStyle.CHARACTER ? 'Character' : 'Landscape'}
@@ -76,7 +76,6 @@ ${REALISM_RULES}
 text, watermark, grayscale, blurry, distorted face, extra fingers, low resolution.`;
 };
 
-// 만다라 프롬프트
 export const MANDALA_PROMPT_TEMPLATE = (userInput: string, difficultyLevel: number) => {
   const diffKeywords = getDifficultyKeywords(difficultyLevel);
   return `**Role**: Mandala Master Artist.
