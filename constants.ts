@@ -6,10 +6,10 @@ export const DEFAULT_DIFFICULTY = 3;
 export const MIN_DIFFICULTY = 1;
 export const MAX_DIFFICULTY = 5;
 
-// [신규] 그림체 스타일 정의 (인물 vs 풍경)
+// [중요] 이 부분이 없으면 에러가 발생합니다.
 export enum ArtStyle {
-  CHARACTER = 'character', // 인물/캐릭터 중심
-  LANDSCAPE = 'landscape'  // 배경/풍경 중심
+  CHARACTER = 'character',
+  LANDSCAPE = 'landscape'
 }
 
 export enum AppMode {
@@ -19,7 +19,6 @@ export enum AppMode {
 
 export const LOCAL_STORAGE_KEY_API = 'gemini_coloring_api_key';
 
-// 난이도별 묘사 수준 (공통)
 const getDifficultyKeywords = (level: number): string => {
   switch (level) {
     case 1: return "Toddler Level. Simple clear outlines. No background. Large shapes.";
@@ -31,7 +30,6 @@ const getDifficultyKeywords = (level: number): string => {
   }
 };
 
-// [핵심 2] 현실성 강화를 위한 공통 룰
 const REALISM_RULES = `
 [REALISM & QUALITY RULES]
 1. ANATOMY/PHYSICS: Use realistic proportions. No 'chibi' heads, no rubbery limbs. Gravity and perspective must be accurate.
@@ -40,11 +38,9 @@ const REALISM_RULES = `
 4. NO TEXT: Absolutely NO words, letters, or signatures.
 `;
 
-// [핵심 3] 스타일별 최적화 프롬프트 생성기
 export const COLORING_PROMPT_TEMPLATE = (userInput: string, difficultyLevel: number, style: ArtStyle) => {
   const diffKeywords = getDifficultyKeywords(difficultyLevel);
   
-  // 스타일 선택에 따른 맞춤형 지시사항
   let styleSpecificInstructions = "";
   
   if (style === ArtStyle.CHARACTER) {
@@ -76,7 +72,6 @@ ${REALISM_RULES}
 text, watermark, grayscale, blurry, distorted face, extra fingers, cartoonish proportions, anime style, simple doodle, low resolution.`;
 };
 
-// 만다라 프롬프트 (기존 유지 + 퀄리티 강화)
 export const MANDALA_PROMPT_TEMPLATE = (userInput: string, difficultyLevel: number) => {
   const diffKeywords = getDifficultyKeywords(difficultyLevel);
   return `**Role**: Mandala Master Artist.
