@@ -24,7 +24,6 @@ const App: React.FC = () => {
   const [count, setCount] = useState<number>(DEFAULT_IMAGE_COUNT);
   const [difficulty, setDifficulty] = useState<number>(DEFAULT_DIFFICULTY);
   const [appMode, setAppMode] = useState<AppMode>(AppMode.COLORING);
-  // hiddenCount 삭제됨
   
   const [images, setImages] = useState<ColoringPage[]>([]);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
