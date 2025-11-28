@@ -10,7 +10,7 @@ export const generateImageWithGemini = async (apiKey: string, prompt: string): P
   // 짧은 별칭 대신 구체적인 버전명(001)을 사용합니다.
   // 안전 설정(SafetySettings)을 제거하여 기본값을 사용합니다(오류 최소화).
   const model = genAI.getGenerativeModel({ 
-    model: "gemini-1.5-flash-001" 
+    model: "gemini-pro" 
   });
 
   // 3. 프롬프트 강화: SVG 코드 생성 및 마크다운 제거 요청
