@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
 
 export const generateImageWithGemini = async (apiKey: string, prompt: string): Promise<string> => {
@@ -8,7 +7,7 @@ export const generateImageWithGemini = async (apiKey: string, prompt: string): P
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash', // Updated to stable flash model
+      model: 'gemini-2.5-flash-image', // Updated to nano banana model for image generation
       contents: { parts: [{ text: prompt }] },
       config: {
         // Safety Settings: BLOCK_NONE is crucial for creative tasks to avoid false positives
@@ -23,12 +22,8 @@ export const generateImageWithGemini = async (apiKey: string, prompt: string): P
 
     let base64Data = null;
     
-    // Check for image generation response structure (if using Imagen model via generateContent)
-    // Or check if the model returns text that contains an image link (less likely with Flash)
-    // NOTE: Gemini 2.0 Flash is multimodal but primarily text-out. 
-    // If you need direct image generation, you might need 'imagen-3.0-generate-001' or similar.
-    // However, assuming the previous prompt used 'gemini-2.5-flash-image' which implies an experimental image capability.
-    // We will stick to the previous extraction logic but try to be robust.
+    // Check for image generation response structure
+    // The nano banana model returns inlineData in the response candidates.
 
     if (response.candidates && response.candidates[0].content.parts) {
       for (const part of response.candidates[0].content.parts) {
@@ -41,7 +36,6 @@ export const generateImageWithGemini = async (apiKey: string, prompt: string): P
 
     if (!base64Data) {
        // If no inline data, check if there is text explaining why, or try a fallback logic if needed.
-       // For now, if strictly using Gemini for images, we expect inlineData.
        console.error("No inlineData found in response:", response);
        throw new Error("이미지를 생성할 수 없습니다. (데이터 없음)");
     }
