@@ -6,7 +6,6 @@ export const DEFAULT_DIFFICULTY = 3;
 export const MIN_DIFFICULTY = 1;
 export const MAX_DIFFICULTY = 5;
 
-// [중요] App.tsx와 Sidebar.tsx에서 사용하는 Enum 정의
 export enum ArtStyle {
   CHARACTER = 'character',
   LANDSCAPE = 'landscape'
@@ -19,7 +18,6 @@ export enum AppMode {
 
 export const LOCAL_STORAGE_KEY_API = 'gemini_coloring_api_key';
 
-// 난이도별 묘사 수준
 const getDifficultyKeywords = (level: number): string => {
   switch (level) {
     case 1: return "Toddler Level. Simple clear outlines. No background. Large shapes.";
@@ -31,51 +29,54 @@ const getDifficultyKeywords = (level: number): string => {
   }
 };
 
-// 공통 품질 룰
 const REALISM_RULES = `
 [REALISM & QUALITY RULES]
-1. ANATOMY/PHYSICS: Use realistic proportions. No 'chibi' heads, no rubbery limbs. Gravity and perspective must be accurate.
-2. LINE WORK: Professional Ink Illustration. Crisp black lines (#000000). No gray, no pencil sketches.
-3. DEPTH: Use line density (hatching) to suggest depth, rather than leaving flat spaces.
+1. ANATOMY/PHYSICS: Use realistic proportions. No 'chibi' heads.
+2. LINE WORK: Professional Ink Illustration. Crisp black lines (#000000). No gray.
+3. DEPTH: Use line density (hatching) to suggest depth.
 4. NO TEXT: Absolutely NO words, letters, or signatures.
 `;
 
-// 도안 생성 프롬프트
-export const COLORING_PROMPT_TEMPLATE = (userInput: string, difficultyLevel: number, style: ArtStyle) => {
+// [업데이트] 이미지 분석 결과가 있을 경우 합치는 함수
+export const COLORING_PROMPT_TEMPLATE = (
+  userInput: string, 
+  difficultyLevel: number, 
+  style: ArtStyle,
+  imageDescription?: string // 선택적 파라미터 추가
+) => {
   const diffKeywords = getDifficultyKeywords(difficultyLevel);
   
+  // 이미지 분석 결과가 있으면 그것을 메인으로 삼음
+  const mainSubject = imageDescription 
+    ? `Main Reference: ${imageDescription}\nUser Modification Request: "${userInput}"`
+    : `"${userInput}"`;
+
   let styleSpecificInstructions = "";
-  
   if (style === ArtStyle.CHARACTER) {
-    styleSpecificInstructions = `
-    **FOCUS**: Character & Anatomy.
-    - Draw the subject with realistic anatomical structure (muscles, fur texture, fabric folds).
-    - Focus on facial expressions and dynamic poses.
-    - Background should be minimal or atmospheric to highlight the character.`;
+    styleSpecificInstructions = "**FOCUS**: Character & Anatomy. Focus on facial expressions.";
   } else {
-    styleSpecificInstructions = `
-    **FOCUS**: Scenery & Atmosphere.
-    - Draw a wide-angle scene with realistic perspective (vanishing points).
-    - Focus on textures of nature (leaves, bark, water ripples) or architecture (bricks, pillars).
-    - The composition should feel immersive and vast.`;
+    styleSpecificInstructions = "**FOCUS**: Scenery & Atmosphere. Realistic perspective.";
   }
 
   return `**Role**: You are a master illustrator specializing in realistic pen-and-ink drawings.
 **Task**: Create a high-quality black and white coloring page.
 
-**SUBJECT**: "${userInput}"
-**MODE**: ${style === ArtStyle.CHARACTER ? 'Character Portrait' : 'Landscape Scenery'}
-**DIFFICULTY**: ${difficultyLevel}/5 (${diffKeywords})
+**SUBJECT CONTEXT**: 
+${mainSubject}
+(If a Main Reference is provided, reconstruct that scene closely but converted into clean line art. Apply User Modification if specified.)
+
+**CONFIGURATION**:
+- Mode: ${style === ArtStyle.CHARACTER ? 'Character' : 'Landscape'}
+- Difficulty: ${difficultyLevel}/5 (${diffKeywords})
 
 ${styleSpecificInstructions}
-
 ${REALISM_RULES}
 
 **NEGATIVE PROMPT**:
-text, watermark, grayscale, blurry, distorted face, extra fingers, cartoonish proportions, anime style, simple doodle, low resolution.`;
+text, watermark, grayscale, blurry, distorted face, extra fingers, low resolution.`;
 };
 
-// 만다라 생성 프롬프트
+// 만다라 프롬프트
 export const MANDALA_PROMPT_TEMPLATE = (userInput: string, difficultyLevel: number) => {
   const diffKeywords = getDifficultyKeywords(difficultyLevel);
   return `**Role**: Mandala Master Artist.
