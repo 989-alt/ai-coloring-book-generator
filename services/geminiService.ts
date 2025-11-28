@@ -5,29 +5,30 @@ export const generateImageWithGemini = async (apiKey: string, prompt: string): P
 
   const genAI = new GoogleGenerativeAI(apiKey);
 
-  // 1. 모델 설정: 확실히 작동하는 'gemini-1.5-flash'를 사용합니다.
-  // 이 모델은 속도가 빠르고 선생님 계정에서 404가 안 뜰 확률이 가장 높습니다.
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  // ⭐ 핵심: 사용자 리스트에 존재하는 '가장 똑똑한 모델' 선택
+  // Gemini 3 Pro는 복잡한 패턴과 공간 지각 능력이 뛰어나서 도안 생성에 최적입니다.
+  const model = genAI.getGenerativeModel({ 
+    model: "gemini-3-pro-preview" 
+  });
 
-  // 2. 퀄리티 업그레이드 프롬프트
-  // Flash 모델도 이 지시사항을 따르면 사진처럼 빽빽한 그림을 그려냅니다.
+  // ⭐ 초고퀄리티 도안 생성을 위한 '마스터 프롬프트'
   const modifiedPrompt = `
-    Role: You are a master SVG artist creating a complex coloring page.
-    User Request: "${prompt}"
+    Role: World-class Illustrator for Coloring Books.
+    Task: Create a high-quality, complex SVG coloring page based on user input: "${prompt}".
 
-    CRITICAL RULES FOR "FULL & DETAILED" OUTPUT:
-    1.  **Density:** The page must be 100% FILLED. No large empty white spaces.
-    2.  **Background:** You MUST draw a detailed background suitable for the subject (e.g., a dense forest, starry sky, underwater coral reef, flowery garden).
-    3.  **Texture:** Use "Zentangle" or "Mandala" patterns inside objects (scales on dinosaurs, veins on leaves, swirls in clouds).
-    4.  **Lines:** - Use <path> with stroke="black" and fill="none".
-        - Vary stroke-width slightly (1.5 to 3) for depth.
-        - Ensure all shapes are closed.
-    5.  **Output:** - Return ONLY valid SVG code.
-        - Start with: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-        - First element: <rect width="100%" height="100%" fill="white"/>
-        - End with: </svg>
+    ### CRITICAL REQUIREMENTS (Must Follow):
+    1.  **NO EMPTY SPACES:** This is a "Full Page" illustration. Fill the entire 512x512 canvas.
+        -   If the subject is an animal, surround it with a dense forest, jungle, or flowers.
+        -   If the subject is space, fill it with detailed stars, planets, and nebulas.
+    2.  **ZENTANGLE STYLE:** Apply detailed "Zentangle" or "Mandala" patterns inside the main objects (e.g., scales, fur, leaves, clouds).
+    3.  **TECHNICAL SPECS:**
+        -   Output **ONLY** raw SVG code. No markdown (\`\`\`), no text.
+        -   Start with: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+        -   **First Line:** <rect width="100%" height="100%" fill="white"/> (White Background is mandatory).
+        -   Use <path> elements with stroke="black" stroke-width="1.5" fill="none".
+        -   Ensure all lines are closed paths (no loose ends).
     
-    Do NOT include markdown (\`\`\`). Do NOT include explanations. Just the code.
+    Create a masterpiece that looks like a professional coloring book page.
   `;
 
   try {
@@ -35,22 +36,36 @@ export const generateImageWithGemini = async (apiKey: string, prompt: string): P
     const response = await result.response;
     let svgText = response.text();
 
-    if (!svgText) throw new Error("API 응답이 비어있습니다.");
+    if (!svgText) throw new Error("생성된 데이터가 없습니다.");
 
-    // 데이터 정제
-    svgText = svgText.replace(/```xml/g, '').replace(/```svg/g, '').replace(/```/g, '').trim();
+    // 데이터 정제 (마크다운 제거)
+    svgText = svgText
+      .replace(/```xml/g, '')
+      .replace(/```svg/g, '')
+      .replace(/```/g, '')
+      .trim();
 
-    // 인코딩
+    // SVG 코드 유효성 검사 (실수 방지)
+    if (!svgText.startsWith("<svg")) {
+        // 가끔 AI가 설명을 먼저 하는 경우, <svg> 태그부터 잘라냄
+        const svgStartIndex = svgText.indexOf("<svg");
+        if (svgStartIndex !== -1) {
+            svgText = svgText.substring(svgStartIndex);
+        }
+    }
+
+    // 인코딩 (Base64 변환)
     const base64Data = btoa(unescape(encodeURIComponent(svgText)));
     return `data:image/svg+xml;base64,${base64Data}`;
 
   } catch (error: any) {
-    console.error("Gemini Error:", error);
-    
-    // 만약 1.5-flash도 404가 뜬다면, 최후의 수단으로 안내
-    if (error.message.includes("404") || error.message.includes("not found")) {
-        throw new Error("모델 오류: 'gemini-1.5-flash'를 찾을 수 없습니다. API 키를 다시 확인해주세요.");
+    console.error("Gemini API Error:", error);
+    let msg = error.message;
+
+    // 만약 3-pro도 안 될 경우를 대비한 예외 처리
+    if (msg.includes("404") || msg.includes("not found")) {
+         msg = "모델 접속 오류: 'gemini-3-pro-preview'에 접근할 수 없습니다. 'gemini-2.5-pro'로 변경해보세요.";
     }
-    throw new Error(error.message);
+    throw new Error(msg);
   }
 };
