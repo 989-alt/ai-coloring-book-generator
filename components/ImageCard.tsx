@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { CheckCircle2, AlertCircle, RefreshCw, Download, Search } from 'lucide-react';
+import { CheckCircle2, AlertCircle, RefreshCw, Download } from 'lucide-react';
 import { ColoringPage } from '../types';
 
 interface ImageCardProps {
@@ -23,19 +24,6 @@ export const ImageCard: React.FC<ImageCardProps> = ({ page, onToggleSelect, onRe
 
   return (
     <div className="flex flex-col gap-2">
-      {/* Hidden Items Hints */}
-      {page.hiddenItems && page.url && (
-        <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3 text-xs text-indigo-800">
-          <div className="flex items-center gap-1 font-semibold mb-1">
-            <Search className="w-3 h-3" />
-            찾아야 할 물건:
-          </div>
-          <p className="leading-relaxed opacity-90">
-            {page.hiddenItems.join(', ')}
-          </p>
-        </div>
-      )}
-
       <div 
         className={`relative group rounded-xl overflow-hidden border-2 transition-all duration-200 bg-white shadow-sm aspect-[3/4] ${
           page.isSelected 
