@@ -105,6 +105,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
               onChange={(e) => setCount(Math.min(MAX_IMAGE_COUNT, Math.max(MIN_IMAGE_COUNT, parseInt(e.target.value) || MIN_IMAGE_COUNT)))}
               className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
             />
+            <p className="text-xs text-slate-400">
+              * 무료 버전은 하루 생성량이 제한됩니다. (안전 권장: 1장)
+            </p>
           </div>
 
           <Button 
@@ -128,7 +131,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="flex items-start gap-2 bg-slate-50 p-3 rounded-lg">
              <Settings className="w-4 h-4 flex-shrink-0 mt-0.5" />
              <p>
-               팁: 1단계는 유아용으로 아주 단순하며, 10단계는 어른용으로 매우 복잡합니다.
+               팁: 오류(429)가 발생하면 잠시 기다렸다가 1장씩 생성해주세요.
              </p>
           </div>
         </div>
