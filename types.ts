@@ -1,4 +1,3 @@
-import { AppMode } from './constants';
 
 export interface ColoringPage {
   id: string;
@@ -6,7 +5,6 @@ export interface ColoringPage {
   isLoading: boolean;
   error: string | null;
   isSelected: boolean;
-  hiddenItems?: string[]; // For hidden object mode
 }
 
 export interface AppState {
@@ -14,6 +12,4 @@ export interface AppState {
   theme: string;
   count: number;
   difficulty: number;
-  mode: AppMode;
-  hiddenCount: number;
 }
