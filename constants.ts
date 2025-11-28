@@ -1,6 +1,6 @@
 
-export const DEFAULT_IMAGE_COUNT = 3;
-export const MAX_IMAGE_COUNT = 5;
+export const DEFAULT_IMAGE_COUNT = 1;
+export const MAX_IMAGE_COUNT = 3;
 export const MIN_IMAGE_COUNT = 1;
 
 export const DEFAULT_DIFFICULTY = 5;
