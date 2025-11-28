@@ -5,31 +5,29 @@ export const generateImageWithGemini = async (apiKey: string, prompt: string): P
 
   const genAI = new GoogleGenerativeAI(apiKey);
 
-  // ⭐ 모델: 리스트에 있는 것 중 가장 최신/똑똑한 2.0 버전 사용
-  // 무료이면서도 복잡한 구조를 이해할 수 있는 유일한 희망입니다.
+  // ⭐ 중요: 사용자님 리스트에 있는 '정확한 모델명' 사용
+  // 1.5-flash 대신 이 이름을 써야 404가 안 뜹니다.
   const model = genAI.getGenerativeModel({ 
-    model: "gemini-2.0-flash-exp" 
+    model: "gemini-flash-latest" 
   });
 
-  // ⭐ 마법의 프롬프트: "도형 금지, 펜 드로잉 스타일 강제"
-  // 단순한 <circle>, <rect>를 쓰지 못하게 하여, 사람이 펜으로 그린 듯한 복잡한 선을 유도합니다.
+  // ⭐ 퀄리티 심폐소생술 프롬프트 (패턴화 전략)
+  // AI가 못 그리는 '형태' 대신, 잘 하는 '무늬'로 승부합니다.
   const modifiedPrompt = `
-    You are a professional Pen Plotter Artist.
-    Task: Create a complex, intricate coloring page for: "${prompt}".
+    Role: Coloring Book Designer.
+    Task: Create a "Zentangle" style coloring page for: "${prompt}".
 
-    ### CRITICAL RULES FOR HIGH QUALITY (Must Follow):
-    1.  **NO PRIMITIVE SHAPES:** Do NOT use <circle>, <rect>, <ellipse>, or <line> tags.
-    2.  **PATH ONLY:** Use ONLY <path d="..." /> elements to draw everything. This makes the drawing look like a hand-drawn illustration, not a geometric diagram.
-    3.  **STYLE:** "Engraving" or "Woodcut" style. Use wavy lines and hatching for texture (fur, clouds, leaves).
-    4.  **COMPOSITION:** Full page. Fill the background with organic patterns (flowers, vines, clouds). No empty space.
-    5.  **TECHNICAL:**
-        -   Return ONLY raw SVG code.
-        -   Canvas: 512x512.
-        -   Start with: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-        -   First line: <path d="M0 0h512v512H0z" fill="white"/> (White background).
-        -   Stroke: Black (#000000), stroke-width="1.5", fill="none".
-    
-    Draw it like a masterpiece ink illustration.
+    ### CRITICAL RULES (To avoid bad drawings):
+    1.  **NO PRIMITIVE SHAPES:** Do NOT use simple <circle> or <rect>.
+    2.  **STYLE:** "Mandala" or "Stained Glass".
+        -   Instead of drawing a realistic dinosaur, draw the *outline* of a dinosaur and fill it with detailed floral patterns, swirls, and triangles.
+        -   This is the most important rule. The inside must be decorative.
+    3.  **BACKGROUND:** Fill the background with falling leaves, stars, or rays of light. Do not leave it white.
+    4.  **TECHNICAL:**
+        -   Return ONLY valid SVG code.
+        -   Start with <svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">.
+        -   First element: <rect width="100%" height="100%" fill="white"/>
+        -   Use <path stroke="black" stroke-width="1" fill="none" ... /> for everything.
   `;
 
   try {
@@ -37,16 +35,12 @@ export const generateImageWithGemini = async (apiKey: string, prompt: string): P
     const response = await result.response;
     let svgText = response.text();
 
-    if (!svgText) throw new Error("데이터 없음");
+    if (!svgText) throw new Error("생성된 데이터가 없습니다.");
 
     // 데이터 정제
-    svgText = svgText
-      .replace(/```xml/g, '')
-      .replace(/```svg/g, '')
-      .replace(/```/g, '')
-      .trim();
+    svgText = svgText.replace(/```xml/g, '').replace(/```svg/g, '').replace(/```/g, '').trim();
 
-    // SVG 추출
+    // SVG 태그 추출 (앞뒤 사족 제거)
     const svgStartIndex = svgText.indexOf("<svg");
     if (svgStartIndex >= 0) {
         svgText = svgText.substring(svgStartIndex);
@@ -62,12 +56,7 @@ export const generateImageWithGemini = async (apiKey: string, prompt: string): P
 
   } catch (error: any) {
     console.error("Gemini API Error:", error);
-    let msg = error.message;
-    
-    // 2.0 모델도 안 될 경우 (드물지만) 1.5-flash로 자동 전환 안내
-    if (msg.includes("429") || msg.includes("not found")) {
-         msg = "2.0 모델 사용량이 많습니다. 잠시 후 다시 시도하거나, 코드에서 'gemini-1.5-flash'로 변경해보세요.";
-    }
-    throw new Error(msg);
+    // 이 모델마저 안 되면 정말 API 키 문제거나 일시적 오류입니다.
+    throw new Error(`생성 실패: ${error.message}`);
   }
 };
