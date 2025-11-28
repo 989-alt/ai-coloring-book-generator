@@ -7,7 +7,7 @@ export const generateImageWithGemini = async (apiKey: string, prompt: string): P
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image', // Updated to nano banana model for image generation
+      model: 'gemini-1.5-flash', // Updated to nano banana model for image generation
       contents: { parts: [{ text: prompt }] },
       config: {
         // Safety Settings: BLOCK_NONE is crucial for creative tasks to avoid false positives
